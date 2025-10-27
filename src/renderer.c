@@ -198,15 +198,21 @@ void renderGame(GameState* gameState) {
     float midScrollPos = fmodf(gameState->level.midgroundOffset, 256.0f);
     
     renderSprite(SPRITE_BACKGROUND, 256.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+
     renderSprite(SPRITE_BACKGROUND, 512.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    
     renderSprite(SPRITE_BACKGROUND, 768.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    
     renderSprite(SPRITE_BACKGROUND, 0.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
     
     float nearScrollPos = fmodf(gameState->level.foregroundOffset, 256.0f);
     
     renderSprite(SPRITE_BACKGROUND, 256.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    
     renderSprite(SPRITE_BACKGROUND, 512.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    
     renderSprite(SPRITE_BACKGROUND, 768.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    
     renderSprite(SPRITE_BACKGROUND, 0.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
     
     renderSprite(SPRITE_PLAYER, gameState->player.x, gameState->player.y, 
@@ -289,17 +295,7 @@ void renderGame(GameState* gameState) {
     char scoreText[32];
     sprintf(scoreText, "SCORE: %d", gameState->player.score);
     
-    for (int i = 0; i < gameState->player.lives; i++) {
-        renderSprite(SPRITE_HUD_LIFE, 20 + (i * 20), 20, 16, 16, 1.0f, 1.0f, 1.0f, 1.0f);
-    }
     
-    if (gameState->player.isRapidFire) {
-        renderSprite(SPRITE_POWERUP_RAPID_FIRE, 430, 20, 16, 16, 1.0f, 1.0f, 0.0f, 1.0f);
-    }
-    
-    if (gameState->player.isDoubleBullet) {
-        renderSprite(SPRITE_POWERUP_DOUBLE_BULLET, 450, 20, 16, 16, 0.0f, 0.5f, 1.0f, 1.0f);
-    }
 }
 
 void renderGameOver(GameState* gameState) {
