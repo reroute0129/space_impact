@@ -3,11 +3,11 @@
 
 #include <stdbool.h>
 
-#define MAX_BULLETS 30
-#define MAX_ENEMIES 30
-#define MAX_ENEMY_BULLETS 30
-#define MAX_POWERUPS 5
-#define MAX_EXPLOSIONS 10
+#define MAX_BULLETS 1000
+#define MAX_ENEMIES 1000
+#define MAX_ENEMY_BULLETS 1000
+#define MAX_POWERUPS 1000
+#define MAX_EXPLOSIONS 1000
 
 typedef enum {
     DIR_NONE,
@@ -102,6 +102,8 @@ typedef struct {
     Level level;
     bool gameOver;
     bool paused;
+    bool benchmarkMode;
+    float benchmarkSpawnBand;
     float enemySpawnTimer;
     float powerupSpawnTimer;
 } GameState;
@@ -114,5 +116,7 @@ void spawnBoss(GameState* gameState);
 void spawnPowerup(GameState* gameState, float x, float y);
 void handleCollisions(GameState* gameState);
 void nextLevel(GameState* gameState);
+
+void prepareBenchmarkScene(GameState* gameState, int density);
 
 #endif 

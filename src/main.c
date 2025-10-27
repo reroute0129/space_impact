@@ -130,12 +130,48 @@ bool initOpenGL() {
     return true;
 }
 
-int main() {
-    srand(time(NULL));
+#define MAX_BENCH_FRAMES 300000
+
+static void print_usage(const char* prog) {
+    printf("Usage: %s [--benchmark] [--duration SEC] [--warmup SEC] [--density 0-100]\n", prog);
+}
+
+static int cmp_desc_double(const void* a, const void* b) {
+    double da = *(const double*)a, db = *(const double*)b;
+    if (da < db) return 1;
+    if (da > db) return -1;
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    bool optBenchmark = false;
+    double optDuration = 10.0;
+    double optWarmup = 1.0;
+    int optDensity = 100;
+
+    for (int i = 1; i < argc; i++) {
+
+        if (strcmp(argv[i], "--benchmark") == 0) {
+            optBenchmark = true;
+        } else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
+            optDuration = atof(argv[++i]);
+        } else if (strcmp(argv[i], "--warmup") == 0 && i + 1 < argc) {
+            optWarmup = atof(argv[++i]);
+        } else if (strcmp(argv[i], "--density") == 0 && i + 1 < argc) {
+            optDensity = atoi(argv[++i]);
+        } else {
+            printf("Unknown option: %s\n", argv[i]);
+            return 1;
+        }
+    }
+
+    srand((unsigned)time(NULL));
 
     if (!initOpenGL()) {
         return -1;
     }
+
+    glfwSwapInterval(0);
 
     if (!initRenderer()) {
         glfwTerminate();
@@ -150,38 +186,116 @@ int main() {
 
     initGame(&gameState);
 
-    double lastTime = glfwGetTime();
-    double deltaTime = 0.0;
-    double frameTime = 1.0 / 60.0; 
+    if (!optBenchmark) {
+        double lastTime = glfwGetTime();
+        double deltaTime = 0.0;
+        double frameTime = 1.0 / 60.0;
 
-    while (!glfwWindowShouldClose(window) && !gameState.gameOver) {
-        double currentTime = glfwGetTime();
-        deltaTime += currentTime - lastTime;
-        lastTime = currentTime;
+        while (!glfwWindowShouldClose(window) && !gameState.gameOver) {
+            double currentTime = glfwGetTime();
+            deltaTime += currentTime - lastTime;
+            lastTime = currentTime;
+
+            glfwPollEvents();
+
+            while (deltaTime >= frameTime) {
+                updateGame(&gameState, frameTime);
+                deltaTime -= frameTime;
+            }
+
+            renderGame(&gameState);
+            glfwSwapBuffers(window);
+        }
+
+        if (gameState.gameOver) {
+            renderGameOver(&gameState);
+            glfwSwapBuffers(window);
+
+            while (!glfwWindowShouldClose(window) && gameState.gameOver) {
+                glfwPollEvents();
+            }
+        }
+
+        destroyRenderer();
+        glfwTerminate();
+        return 0;
+    }
+
+    if (optDensity < 0) optDensity = 0;
+    if (optDensity > 100) optDensity = 100;
+    prepareBenchmarkScene(&gameState, optDensity);
+
+    static double frameDurations[MAX_BENCH_FRAMES];
+    int framesCollected = 0;
+    double sumDur = 0.0, minDur = 1e9, maxDur = 0.0;
+
+    const double fixedDt = 1.0 / 60.0;
+    double lastTime = glfwGetTime();
+    double accumulator = 0.0;
+
+    const double benchStart = lastTime;
+    const double warmupEnd = benchStart + ((optWarmup > 0.0) ? optWarmup : 0.0);
+    const double benchEnd = warmupEnd + ((optDuration > 0.0) ? optDuration : 0.0);
+    double lastSwapTs = lastTime;
+
+    printf("[Benchmark] density=%d, warmup=%.2fs, duration=%.2fs\n",
+           optDensity, optWarmup, optDuration);
+    while (!glfwWindowShouldClose(window)) {
+        double now = glfwGetTime();
+        accumulator += now - lastTime;
+        lastTime = now;
 
         glfwPollEvents();
 
-        while (deltaTime >= frameTime) {
-            updateGame(&gameState, frameTime);
-            deltaTime -= frameTime;
+        while (accumulator >= fixedDt) {
+            updateGame(&gameState, (float)fixedDt);
+            accumulator -= fixedDt;
         }
 
         renderGame(&gameState);
-
-        glfwSwapBuffers(window);
-    }
-
-    if (gameState.gameOver) {
-        renderGameOver(&gameState);
         glfwSwapBuffers(window);
 
-        while (!glfwWindowShouldClose(window) && gameState.gameOver) {
-            glfwPollEvents();
+        double afterSwap = glfwGetTime();
+        double frameDur = afterSwap - lastSwapTs;
+        lastSwapTs = afterSwap;
+
+        if (afterSwap >= warmupEnd && afterSwap <= benchEnd) {
+            if (framesCollected < MAX_BENCH_FRAMES) {
+                frameDurations[framesCollected++] = frameDur;
+            }
+            sumDur += frameDur;
+            if (frameDur < minDur) minDur = frameDur;
+            if (frameDur > maxDur) maxDur = frameDur;
         }
+
+        if (afterSwap >= benchEnd) break;
     }
+
+    double elapsed = sumDur;
+    double avgFps = (elapsed > 0.0) ? ((double)framesCollected / elapsed) : 0.0;
+    double minFps = (maxDur > 0.0) ? (1.0 / maxDur) : 0.0;
+    double maxFps = (minDur > 0.0) ? (1.0 / minDur) : 0.0;
+
+    double p1LowFps = 0.0;
+    if (framesCollected > 0) {
+        qsort(frameDurations, framesCollected, sizeof(double), cmp_desc_double);
+        int n = (int)ceil(framesCollected * 0.01);
+        if (n < 1) n = 1;
+        double sumSlow = 0.0;
+        for (int i = 0; i < n && i < framesCollected; i++) sumSlow += frameDurations[i];
+        double avgSlowDur = sumSlow / (double)n;
+        if (avgSlowDur > 0.0) p1LowFps = 1.0 / avgSlowDur;
+    }
+
+    printf("\nBenchmark results\n");
+    printf("Frames: %d\n", framesCollected);
+    printf("Measured time: %.3f s\n", elapsed);
+    printf("Avg FPS: %.2f\n", avgFps);
+    printf("1%% low FPS: %.2f\n", p1LowFps);
+    printf("Min FPS: %.2f\n", minFps);
+    printf("Max FPS: %.2f\n", maxFps);
 
     destroyRenderer();
     glfwTerminate();
-
     return 0;
 }

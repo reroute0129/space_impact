@@ -68,6 +68,8 @@ void initGame(GameState* gameState) {
 
     gameState->gameOver = false;
     gameState->paused = false;
+    gameState->benchmarkMode = false;
+    gameState->benchmarkSpawnBand = 0.10f;
 }
 
 void updateGame(GameState* gameState, float deltaTime) {
@@ -137,14 +139,29 @@ void updateGame(GameState* gameState, float deltaTime) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (gameState->bullets[i].active) {
             gameState->bullets[i].x += gameState->bullets[i].speed * deltaTime;
-            
-            if (gameState->bullets[i].x > SCREEN_WIDTH + gameState->bullets[i].width) {
-                gameState->bullets[i].active = false;
-            }
-            
-            if (gameState->bullets[i].y < -gameState->bullets[i].height || 
-                gameState->bullets[i].y > SCREEN_HEIGHT + gameState->bullets[i].height) {
-                gameState->bullets[i].active = false;
+
+            if (gameState->benchmarkMode) {
+                float offLeft = -gameState->bullets[i].width;
+                float offRight = SCREEN_WIDTH + gameState->bullets[i].width;
+                if (gameState->bullets[i].speed < 0.0f && gameState->bullets[i].x < offLeft) {
+                    gameState->bullets[i].x = SCREEN_WIDTH - gameState->bullets[i].width / 2.0f;
+                    float minY = BULLET_HEIGHT / 2.0f;
+                    float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
+                    gameState->bullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                } else if (gameState->bullets[i].speed > 0.0f && gameState->bullets[i].x > offRight) {
+                    gameState->bullets[i].x = gameState->bullets[i].width / 2.0f;
+                    float minY = BULLET_HEIGHT / 2.0f;
+                    float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
+                    gameState->bullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                }
+            } else {
+                if (gameState->bullets[i].x > SCREEN_WIDTH + gameState->bullets[i].width) {
+                    gameState->bullets[i].active = false;
+                }
+                if (gameState->bullets[i].y < -gameState->bullets[i].height || 
+                    gameState->bullets[i].y > SCREEN_HEIGHT + gameState->bullets[i].height) {
+                    gameState->bullets[i].active = false;
+                }
             }
         }
     }
@@ -152,14 +169,22 @@ void updateGame(GameState* gameState, float deltaTime) {
     for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
         if (gameState->enemyBullets[i].active) {
             gameState->enemyBullets[i].x -= gameState->enemyBullets[i].speed * deltaTime;
-            
-            if (gameState->enemyBullets[i].x < -gameState->enemyBullets[i].width) {
-                gameState->enemyBullets[i].active = false;
-            }
-            
-            if (gameState->enemyBullets[i].y < -gameState->enemyBullets[i].height || 
-                gameState->enemyBullets[i].y > SCREEN_HEIGHT + gameState->enemyBullets[i].height) {
-                gameState->enemyBullets[i].active = false;
+
+            if (gameState->benchmarkMode) {
+                if (gameState->enemyBullets[i].x < -gameState->enemyBullets[i].width) {
+                    gameState->enemyBullets[i].x = SCREEN_WIDTH - gameState->enemyBullets[i].width / 2.0f;
+                    float minY = BULLET_HEIGHT / 2.0f;
+                    float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
+                    gameState->enemyBullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                }
+            } else {
+                if (gameState->enemyBullets[i].x < -gameState->enemyBullets[i].width) {
+                    gameState->enemyBullets[i].active = false;
+                }
+                if (gameState->enemyBullets[i].y < -gameState->enemyBullets[i].height || 
+                    gameState->enemyBullets[i].y > SCREEN_HEIGHT + gameState->enemyBullets[i].height) {
+                    gameState->enemyBullets[i].active = false;
+                }
             }
         }
     }
@@ -262,16 +287,38 @@ void updateGame(GameState* gameState, float deltaTime) {
             }
             
             if (gameState->enemies[i].type == ENEMY_BOSS) {
-                if (gameState->enemies[i].x < SCREEN_WIDTH / 2) {
-                    gameState->enemies[i].x = SCREEN_WIDTH / 2;
-                } else if (gameState->enemies[i].x > SCREEN_WIDTH - gameState->enemies[i].width / 2) {
-                    gameState->enemies[i].x = SCREEN_WIDTH - gameState->enemies[i].width / 2;
+                if (!gameState->benchmarkMode) {
+                    if (gameState->enemies[i].x < SCREEN_WIDTH / 2) {
+                        gameState->enemies[i].x = SCREEN_WIDTH / 2;
+                    } else if (gameState->enemies[i].x > SCREEN_WIDTH - gameState->enemies[i].width / 2) {
+                        gameState->enemies[i].x = SCREEN_WIDTH - gameState->enemies[i].width / 2;
+                    }
                 }
             }
             
-            if (gameState->enemies[i].x < -gameState->enemies[i].width && 
-                gameState->enemies[i].type != ENEMY_BOSS) {
-                gameState->enemies[i].active = false;
+            if (!gameState->benchmarkMode) {
+                if (gameState->enemies[i].x < -gameState->enemies[i].width && 
+                    gameState->enemies[i].type != ENEMY_BOSS) {
+                    gameState->enemies[i].active = false;
+                }
+            } else {
+                float wrapThreshold = -gameState->enemies[i].width * 0.25f;
+                if (gameState->enemies[i].x < wrapThreshold) {
+                    float enemyHeight = gameState->enemies[i].height;
+                    float minY = enemyHeight / 2.0f;
+                    float maxY = SCREEN_HEIGHT - enemyHeight;
+                    float bandFrac = gameState->benchmarkSpawnBand;
+                    if (bandFrac <= 0.0f) bandFrac = 0.10f;
+                    if (bandFrac > 1.0f) bandFrac = 1.0f;
+                    float band = SCREEN_WIDTH * bandFrac;
+                    float jitter = (float)(rand() % (int)(band + 1));
+                    gameState->enemies[i].x = (SCREEN_WIDTH - gameState->enemies[i].width / 2.0f) - jitter;
+                    gameState->enemies[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                    gameState->enemies[i].movementPattern = (float)(rand() % 628) / 100.0f;
+                    if (gameState->enemies[i].type == ENEMY_LARGE || gameState->enemies[i].type == ENEMY_BOSS) {
+                        gameState->enemies[i].bulletCooldown = (rand() % 3) * 0.5f + 0.2f;
+                    }
+                }
             }
         }
     }
@@ -286,72 +333,94 @@ void updateGame(GameState* gameState, float deltaTime) {
                 gameState->powerups[i].y = SCREEN_HEIGHT - gameState->powerups[i].height;
             }
             
-            if (gameState->powerups[i].x < -gameState->powerups[i].width) {
-                gameState->powerups[i].active = false;
+            if (!gameState->benchmarkMode) {
+                if (gameState->powerups[i].x < -gameState->powerups[i].width) {
+                    gameState->powerups[i].active = false;
+                }
+            } else {
+                if (gameState->powerups[i].x < -gameState->powerups[i].width) {
+                    gameState->powerups[i].x = SCREEN_WIDTH - gameState->powerups[i].width / 2.0f;
+                    float minY = gameState->powerups[i].height / 2.0f;
+                    float maxY = SCREEN_HEIGHT - gameState->powerups[i].height;
+                    gameState->powerups[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                    gameState->powerups[i].type = (PowerupType)(rand() % 3);
+                }
             }
         }
     }
 
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
-        if (gameState->explosions[i].active) {
-            gameState->explosions[i].currentLife -= deltaTime;
-            if (gameState->explosions[i].currentLife <= 0) {
-                gameState->explosions[i].active = false;
+            if (gameState->explosions[i].active) {
+                gameState->explosions[i].currentLife -= deltaTime;
+                if (gameState->benchmarkMode) {
+                    if (gameState->explosions[i].currentLife <= 0) {
+                        gameState->explosions[i].currentLife = gameState->explosions[i].lifespan;
+                    }
+                } else {
+                    if (gameState->explosions[i].currentLife <= 0) {
+                        gameState->explosions[i].active = false;
+                    }
+                }
             }
-        }
     }
 
-    gameState->enemySpawnTimer -= deltaTime;
-    if (gameState->enemySpawnTimer <= 0 && !gameState->level.bossSpawned) {
-        int enemyCount = 0;
-        for (int i = 0; i < MAX_ENEMIES; i++) {
-            if (gameState->enemies[i].active) {
-                enemyCount++;
-            }
-        }
-        
-        if (gameState->player.score >= gameState->level.number * 10) {
-            spawnBoss(gameState);
-            gameState->level.bossSpawned = true;
-        } else {
-            EnemyType type;
-            int r = rand() % 100;
-            if (r < 60) {
-                type = ENEMY_SMALL;
-            } else if (r < 85) {
-                type = ENEMY_MEDIUM;
-            } else {
-                type = ENEMY_LARGE;
+    if (!gameState->benchmarkMode) {
+        gameState->enemySpawnTimer -= deltaTime;
+        if (gameState->enemySpawnTimer <= 0 && !gameState->level.bossSpawned) {
+            int enemyCount = 0;
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (gameState->enemies[i].active) {
+                    enemyCount++;
+                }
             }
             
-            spawnEnemy(gameState, type);
-            gameState->enemySpawnTimer = gameState->level.enemySpawnRate;
+            if (gameState->player.score >= gameState->level.number * 10) {
+                spawnBoss(gameState);
+                gameState->level.bossSpawned = true;
+            } else {
+                EnemyType type;
+                int r = rand() % 100;
+                if (r < 60) {
+                    type = ENEMY_SMALL;
+                } else if (r < 85) {
+                    type = ENEMY_MEDIUM;
+                } else {
+                    type = ENEMY_LARGE;
+                }
+                
+                spawnEnemy(gameState, type);
+                gameState->enemySpawnTimer = gameState->level.enemySpawnRate;
+            }
         }
     }
 
-    gameState->powerupSpawnTimer -= deltaTime;
-    if (gameState->powerupSpawnTimer <= 0) {
-        float x = SCREEN_WIDTH;
-        
-        float minY = POWERUP_HEIGHT / 2;
-        float maxY = SCREEN_HEIGHT - POWERUP_HEIGHT;
-        float y = (rand() % (int)(maxY - minY)) + minY;
-        
-        spawnPowerup(gameState, x, y);
-        gameState->powerupSpawnTimer = POWERUP_SPAWN_DELAY;
+    if (!gameState->benchmarkMode) {
+        gameState->powerupSpawnTimer -= deltaTime;
+        if (gameState->powerupSpawnTimer <= 0) {
+            float x = SCREEN_WIDTH;
+            
+            float minY = POWERUP_HEIGHT / 2;
+            float maxY = SCREEN_HEIGHT - POWERUP_HEIGHT;
+            float y = (rand() % (int)(maxY - minY)) + minY;
+            
+            spawnPowerup(gameState, x, y);
+            gameState->powerupSpawnTimer = POWERUP_SPAWN_DELAY;
+        }
     }
 
     gameState->level.backgroundOffset += gameState->level.scrollSpeed * 0.3f * deltaTime;  
     gameState->level.midgroundOffset += gameState->level.scrollSpeed * 0.7f * deltaTime;   
     gameState->level.foregroundOffset += gameState->level.scrollSpeed * 1.4f * deltaTime;  
 
-    handleCollisions(gameState);
+    if (!gameState->benchmarkMode) {
+        handleCollisions(gameState);
+    }
 
     if (gameState->level.bossSpawned && gameState->level.bossDefeated) {
         nextLevel(gameState);
     }
 
-    if (gameState->player.lives <= 0) {
+    if (!gameState->benchmarkMode && gameState->player.lives <= 0) {
         gameState->gameOver = true;
     }
 }
@@ -690,4 +759,170 @@ void nextLevel(GameState* gameState) {
     
     gameState->enemySpawnTimer = 2.0f;
     gameState->powerupSpawnTimer = POWERUP_SPAWN_DELAY / 2;
+}
+
+void prepareBenchmarkScene(GameState* gameState, int density) {
+    if (density < 0) density = 0;
+    if (density > 100) density = 100;
+
+    gameState->benchmarkMode = true;
+    gameState->benchmarkSpawnBand = 0.10f;
+    gameState->player.lives = 9999;
+    gameState->player.bulletCooldown = 0.0f;
+
+    gameState->level.scrollSpeed = 80.0f;
+    gameState->level.enemySpawnRate = 0.15f;
+    gameState->enemySpawnTimer = 0.0f;
+    gameState->powerupSpawnTimer = 2.0f;
+
+    int targetBullets = (MAX_BULLETS * density) / 100;
+    int targetEnemyBullets = (MAX_ENEMY_BULLETS * density) / 100;
+    int targetEnemies = (MAX_ENEMIES * density) / 100;
+    int targetPowerups = (MAX_POWERUPS * density) / 100;
+    int targetExplosions = (MAX_EXPLOSIONS * density) / 100;
+
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (i < targetBullets) {
+            gameState->bullets[i].active = true;
+            gameState->bullets[i].width = BULLET_WIDTH;
+            gameState->bullets[i].height = BULLET_HEIGHT;
+            gameState->bullets[i].speed = -BULLET_SPEED;
+            gameState->bullets[i].x = (float)(rand() % SCREEN_WIDTH);
+            gameState->bullets[i].y = (float)(rand() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
+        } else {
+            gameState->bullets[i].active = false;
+        }
+    }
+
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (i < targetEnemyBullets) {
+            gameState->enemyBullets[i].active = true;
+            gameState->enemyBullets[i].width = BULLET_WIDTH;
+            gameState->enemyBullets[i].height = BULLET_HEIGHT;
+            gameState->enemyBullets[i].speed = ENEMY_BULLET_SPEED;
+            gameState->enemyBullets[i].x = (float)(SCREEN_WIDTH - (rand() % (SCREEN_WIDTH / 2)));
+            gameState->enemyBullets[i].y = (float)(rand() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
+        } else {
+            gameState->enemyBullets[i].active = false;
+        }
+    }
+
+    int enemiesPlaced = 0;
+    int bossTarget = 0;
+    if (targetEnemies > 0) {
+        bossTarget = 10;
+        if (bossTarget > targetEnemies) bossTarget = targetEnemies;
+    }
+    int bossesPlaced = 0;
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (enemiesPlaced >= targetEnemies) {
+            gameState->enemies[i].active = false;
+            continue;
+        }
+
+        EnemyType type;
+        if (bossesPlaced < bossTarget) {
+            type = ENEMY_BOSS;
+            bossesPlaced++;
+        } else {
+            int r = rand() % 100;
+            if (r < 60) type = ENEMY_SMALL; else if (r < 85) type = ENEMY_MEDIUM; else type = ENEMY_LARGE;
+        }
+
+        gameState->enemies[i].type = type;
+        gameState->enemies[i].active = true;
+        gameState->enemies[i].movementPattern = (float)(rand() % 628) / 100.0f;
+
+        switch (type) {
+            case ENEMY_SMALL:
+                gameState->enemies[i].width = 16;
+                gameState->enemies[i].height = 12;
+                gameState->enemies[i].speed = 90.0f + (gameState->level.number * 5.0f);
+                gameState->enemies[i].health = 1;
+                gameState->enemies[i].score = 30;
+                break;
+            case ENEMY_MEDIUM:
+                gameState->enemies[i].width = 24;
+                gameState->enemies[i].height = 16;
+                gameState->enemies[i].speed = 70.0f + (gameState->level.number * 3.0f);
+                gameState->enemies[i].health = 2;
+                gameState->enemies[i].score = 50;
+                break;
+            case ENEMY_LARGE:
+                gameState->enemies[i].width = 32;
+                gameState->enemies[i].height = 24;
+                gameState->enemies[i].speed = 50.0f + (gameState->level.number * 2.0f);
+                gameState->enemies[i].health = 3;
+                gameState->enemies[i].score = 150;
+                gameState->enemies[i].bulletCooldown = 0.2f;
+                break;
+            case ENEMY_BOSS:
+                gameState->enemies[i].width = 64;
+                gameState->enemies[i].height = 48;
+                gameState->enemies[i].speed = 20.0f;
+                gameState->enemies[i].health = 100;
+                gameState->enemies[i].score = 1000;
+                gameState->enemies[i].movementPattern = 0.0f;
+                gameState->enemies[i].bulletCooldown = 0.5f;
+                break;
+        }
+
+        
+        float bandFrac = gameState->benchmarkSpawnBand;
+        if (bandFrac <= 0.0f) bandFrac = 0.10f;
+        if (bandFrac > 1.0f) bandFrac = 1.0f;
+        float exMin, exMax;
+        if (type == ENEMY_BOSS && bossTarget > 0) {
+            float bossBand = bandFrac * 3.0f;
+            if (bossBand < 0.30f) bossBand = 0.30f;
+            if (bossBand > 1.0f) bossBand = 1.0f;
+            exMin = SCREEN_WIDTH * (1.0f - bossBand);
+            exMax = SCREEN_WIDTH - gameState->enemies[i].width / 2.0f;
+            float bandWidth = (exMax - exMin);
+            if (bandWidth < 1.0f) bandWidth = 1.0f;
+            int bossIndex = bossesPlaced - 1;
+            if (bossIndex < 0) bossIndex = 0;
+            if (bossTarget < 1) bossTarget = 1;
+            float slot = bandWidth / (float)bossTarget;
+            float jitter = slot * 0.2f * ((float)(rand() % 100) / 100.0f);
+            gameState->enemies[i].x = exMin + slot * bossIndex + slot * 0.4f + jitter;
+        } else {
+            exMin = SCREEN_WIDTH * (1.0f - bandFrac);
+            exMax = SCREEN_WIDTH - gameState->enemies[i].width / 2.0f;
+            gameState->enemies[i].x = exMin + (float)(rand() % (int)(exMax - exMin + 1));
+        }
+        float eyMin = gameState->enemies[i].height / 2.0f;
+        float eyMax = SCREEN_HEIGHT - gameState->enemies[i].height;
+        gameState->enemies[i].y = eyMin + (float)(rand() % (int)(eyMax - eyMin + 1));
+
+        enemiesPlaced++;
+    }
+
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (i < targetPowerups) {
+            gameState->powerups[i].active = true;
+            gameState->powerups[i].width = POWERUP_WIDTH;
+            gameState->powerups[i].height = POWERUP_HEIGHT;
+            gameState->powerups[i].speed = 60.0f;
+            gameState->powerups[i].type = (PowerupType)(rand() % 3);
+            gameState->powerups[i].x = SCREEN_WIDTH - (float)(rand() % (SCREEN_WIDTH / 3));
+            gameState->powerups[i].y = (float)(rand() % (SCREEN_HEIGHT - POWERUP_HEIGHT)) + POWERUP_HEIGHT / 2.0f;
+        } else {
+            gameState->powerups[i].active = false;
+        }
+    }
+
+    for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+        if (i < targetExplosions) {
+            gameState->explosions[i].active = true;
+            gameState->explosions[i].width = 24.0f;
+            gameState->explosions[i].height = 24.0f;
+            gameState->explosions[i].lifespan = 0.6f;
+            gameState->explosions[i].currentLife = 0.6f * (float)(rand() % 100) / 100.0f;
+            gameState->explosions[i].x = (float)(rand() % SCREEN_WIDTH);
+            gameState->explosions[i].y = (float)(rand() % SCREEN_HEIGHT);
+        } else {
+            gameState->explosions[i].active = false;
+        }
+    }
 }
