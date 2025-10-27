@@ -294,8 +294,20 @@ void renderGame(GameState* gameState) {
     
     char scoreText[32];
     sprintf(scoreText, "SCORE: %d", gameState->player.score);
-    
-    
+
+    if (!gameState->benchmarkMode) {
+        for (int i = 0; i < gameState->player.lives; i++) {
+            renderSprite(SPRITE_HUD_LIFE, 20 + (i * 20), 20, 16, 16, 1.0f, 1.0f, 1.0f, 1.0f);
+        }
+
+        if (gameState->player.isRapidFire) {
+            renderSprite(SPRITE_POWERUP_RAPID_FIRE, 430, 20, 16, 16, 1.0f, 1.0f, 0.0f, 1.0f);
+        }
+
+        if (gameState->player.isDoubleBullet) {
+            renderSprite(SPRITE_POWERUP_DOUBLE_BULLET, 450, 20, 16, 16, 0.0f, 0.5f, 1.0f, 1.0f);
+        }
+    }
 }
 
 void renderGameOver(GameState* gameState) {
