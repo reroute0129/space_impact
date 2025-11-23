@@ -3,11 +3,11 @@
 
 #include <stdbool.h>
 
-#define MAX_BULLETS 1000
-#define MAX_ENEMIES 1000
-#define MAX_ENEMY_BULLETS 1000
-#define MAX_POWERUPS 1000
-#define MAX_EXPLOSIONS 1000
+#define MAX_BULLETS 2250
+#define MAX_ENEMIES 2250
+#define MAX_ENEMY_BULLETS 2250
+#define MAX_POWERUPS 2250
+#define MAX_EXPLOSIONS 1200
 
 typedef enum {
     DIR_NONE,
@@ -79,6 +79,7 @@ typedef struct {
     float lifespan;
     float currentLife;
     bool active;
+    bool persistent; // if true, explosion loops in benchmark
 } Explosion;
 
 typedef struct {

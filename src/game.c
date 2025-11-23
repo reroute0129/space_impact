@@ -4,6 +4,8 @@
 
 #include "game.h"
 
+static void respawnEnemyRight(GameState* gameState, int idx);
+
 #define PLAYER_SPEED 150.0f
 #define BULLET_SPEED 300.0f
 #define ENEMY_BULLET_SPEED 200.0f
@@ -64,6 +66,7 @@ void initGame(GameState* gameState) {
 
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
         gameState->explosions[i].active = false;
+        gameState->explosions[i].persistent = false;
     }
 
     gameState->gameOver = false;
@@ -350,18 +353,16 @@ void updateGame(GameState* gameState, float deltaTime) {
     }
 
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
-            if (gameState->explosions[i].active) {
-                gameState->explosions[i].currentLife -= deltaTime;
-                if (gameState->benchmarkMode) {
-                    if (gameState->explosions[i].currentLife <= 0) {
-                        gameState->explosions[i].currentLife = gameState->explosions[i].lifespan;
-                    }
+        if (gameState->explosions[i].active) {
+            gameState->explosions[i].currentLife -= deltaTime;
+            if (gameState->explosions[i].currentLife <= 0) {
+                if (gameState->benchmarkMode && gameState->explosions[i].persistent) {
+                    gameState->explosions[i].currentLife = gameState->explosions[i].lifespan;
                 } else {
-                    if (gameState->explosions[i].currentLife <= 0) {
-                        gameState->explosions[i].active = false;
-                    }
+                    gameState->explosions[i].active = false;
                 }
             }
+        }
     }
 
     if (!gameState->benchmarkMode) {
@@ -412,9 +413,7 @@ void updateGame(GameState* gameState, float deltaTime) {
     gameState->level.midgroundOffset += gameState->level.scrollSpeed * 0.7f * deltaTime;   
     gameState->level.foregroundOffset += gameState->level.scrollSpeed * 1.4f * deltaTime;  
 
-    if (!gameState->benchmarkMode) {
-        handleCollisions(gameState);
-    }
+    handleCollisions(gameState);
 
     if (gameState->level.bossSpawned && gameState->level.bossDefeated) {
         nextLevel(gameState);
@@ -623,6 +622,7 @@ void createExplosion(GameState* gameState, float x, float y, float size) {
             gameState->explosions[i].lifespan = 0.5f;
             gameState->explosions[i].currentLife = 0.5f;
             gameState->explosions[i].active = true;
+            gameState->explosions[i].persistent = false;
             break;
         }
     }
@@ -648,16 +648,23 @@ void handleCollisions(GameState* gameState) {
                                            gameState->enemies[j].width * 1.5f);
                             
                             if (gameState->enemies[j].type == ENEMY_BOSS) {
-                                gameState->level.bossDefeated = true;
-                                
-                                spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
+                                if (!gameState->benchmarkMode) {
+                                    gameState->level.bossDefeated = true;
+                                    spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
+                                } else {
+                                    spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
+                                }
                             }
                             
                             if (gameState->enemies[j].type != ENEMY_BOSS && rand() % 100 < 10) {
                                 spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
                             }
                             
-                            gameState->enemies[j].active = false;
+                            if (gameState->benchmarkMode) {
+                                respawnEnemyRight(gameState, j);
+                            } else {
+                                gameState->enemies[j].active = false;
+                            }
                         }
                         break;
                     }
@@ -673,7 +680,9 @@ void handleCollisions(GameState* gameState) {
                 gameState->enemyBullets[i].y < gameState->player.y + gameState->player.height &&
                 gameState->enemyBullets[i].y + gameState->enemyBullets[i].height > gameState->player.y) {
                 
-                gameState->player.lives--;
+                if (!gameState->benchmarkMode) {
+                    gameState->player.lives--;
+                }
                 gameState->enemyBullets[i].active = false;
                 
                 createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
@@ -692,13 +701,19 @@ void handleCollisions(GameState* gameState) {
                 gameState->enemies[i].y < gameState->player.y + gameState->player.height &&
                 gameState->enemies[i].y + gameState->enemies[i].height > gameState->player.y) {
                 
-                gameState->player.lives--;
+                if (!gameState->benchmarkMode) {
+                    gameState->player.lives--;
+                }
                 
                 createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
                 createExplosion(gameState, gameState->enemies[i].x, gameState->enemies[i].y, gameState->enemies[i].width);
                 
                 if (gameState->enemies[i].type != ENEMY_BOSS) {
-                    gameState->enemies[i].active = false;
+                    if (gameState->benchmarkMode) {
+                        respawnEnemyRight(gameState, i);
+                    } else {
+                        gameState->enemies[i].active = false;
+                    }
                 } else {
                     gameState->player.x = 50.0f;
                 }
@@ -759,6 +774,33 @@ void nextLevel(GameState* gameState) {
     
     gameState->enemySpawnTimer = 2.0f;
     gameState->powerupSpawnTimer = POWERUP_SPAWN_DELAY / 2;
+}
+
+static void respawnEnemyRight(GameState* gameState, int idx) {
+    float bandFrac = gameState->benchmarkMode ? gameState->benchmarkSpawnBand : 0.10f;
+    if (bandFrac <= 0.0f) bandFrac = 0.10f;
+    if (bandFrac > 1.0f) bandFrac = 1.0f;
+    float band = SCREEN_WIDTH * bandFrac;
+    float jitter = (float)(rand() % (int)(band + 1));
+
+    Enemy* e = &gameState->enemies[idx];
+    float minY = e->height / 2.0f;
+    float maxY = SCREEN_HEIGHT - e->height;
+    e->x = (SCREEN_WIDTH - e->width / 2.0f) - jitter;
+    e->y = minY + (float)(rand() % (int)(maxY - minY + 1));
+    e->movementPattern = (float)(rand() % 628) / 100.0f;
+    if (e->type == ENEMY_LARGE) {
+        e->bulletCooldown = (rand() % 3) * 0.5f + 0.2f;
+    } else if (e->type == ENEMY_BOSS) {
+        e->bulletCooldown = 0.5f;
+    }
+    switch (e->type) {
+        case ENEMY_SMALL: e->health = 1; break;
+        case ENEMY_MEDIUM: e->health = 2; break;
+        case ENEMY_LARGE: e->health = 3; break;
+        case ENEMY_BOSS: e->health = 100; break;
+    }
+    e->active = true;
 }
 
 void prepareBenchmarkScene(GameState* gameState, int density) {
@@ -919,10 +961,12 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             gameState->explosions[i].height = 24.0f;
             gameState->explosions[i].lifespan = 0.6f;
             gameState->explosions[i].currentLife = 0.6f * (float)(rand() % 100) / 100.0f;
+            gameState->explosions[i].persistent = true;
             gameState->explosions[i].x = (float)(rand() % SCREEN_WIDTH);
             gameState->explosions[i].y = (float)(rand() % SCREEN_HEIGHT);
         } else {
             gameState->explosions[i].active = false;
+            gameState->explosions[i].persistent = false;
         }
     }
 }
