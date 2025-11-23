@@ -1,7 +1,21 @@
 CC = gcc
-BREW_PREFIX = $(shell brew --prefix)
-CFLAGS = -Wall -Wextra -g -std=c99 -I$(BREW_PREFIX)/include -I./include
-LDFLAGS = -L$(BREW_PREFIX)/lib -lGLEW -lglfw -framework OpenGL -framework Cocoa -framework IOKit -lm
+UNAME_S := $(shell uname -s)
+
+# Platform-specific settings
+ifeq ($(UNAME_S),Darwin)
+    # macOS
+    BREW_PREFIX = $(shell brew --prefix)
+    CFLAGS = -Wall -Wextra -g -std=c99 -I$(BREW_PREFIX)/include -I./include
+    LDFLAGS = -L$(BREW_PREFIX)/lib -lGLEW -lglfw -framework OpenGL -framework Cocoa -framework IOKit -lm
+else ifeq ($(UNAME_S),Linux)
+    # Linux
+    CFLAGS = -Wall -Wextra -g -std=c99 -I./include
+    LDFLAGS = -lGL -lGLEW -lglfw -lm
+else
+    # Default (assume Linux-like)
+    CFLAGS = -Wall -Wextra -g -std=c99 -I./include
+    LDFLAGS = -lGL -lGLEW -lglfw -lm
+endif
 
 SRC_DIR = src
 INCLUDE_DIR = include
