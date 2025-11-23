@@ -634,46 +634,61 @@ void handleCollisions(GameState* gameState) {
     const float playerRight = playerX + playerWidth;
     const float playerBottom = playerY + playerHeight;
 
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (gameState->bullets[i].active) {
-            // Hoist bullet bounds calculation
-            const float bulletX = gameState->bullets[i].x;
-            const float bulletY = gameState->bullets[i].y;
-            const float bulletRight = bulletX + gameState->bullets[i].width;
-            const float bulletBottom = bulletY + gameState->bullets[i].height;
+    // Algorithmic optimization: Build active enemy list to reduce iterations
+    static int activeEnemies[MAX_ENEMIES];
+    int activeEnemyCount = 0;
+    for (int j = 0; j < MAX_ENEMIES; j++) {
+        if (gameState->enemies[j].active) {
+            activeEnemies[activeEnemyCount++] = j;
+        }
+    }
 
-            for (int j = 0; j < MAX_ENEMIES; j++) {
-                if (gameState->enemies[j].active) {
-                    // Use pre-calculated bullet bounds
-                    if (bulletX < gameState->enemies[j].x + gameState->enemies[j].width &&
-                        bulletRight > gameState->enemies[j].x &&
-                        bulletY < gameState->enemies[j].y + gameState->enemies[j].height &&
-                        bulletBottom > gameState->enemies[j].y) {
+    // Bullet-Enemy collisions: Only iterate over active entities
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!gameState->bullets[i].active) continue;
+
+        // Hoist bullet bounds calculation
+        const float bulletX = gameState->bullets[i].x;
+        const float bulletY = gameState->bullets[i].y;
+        const float bulletRight = bulletX + gameState->bullets[i].width;
+        const float bulletBottom = bulletY + gameState->bullets[i].height;
+
+        for (int idx = 0; idx < activeEnemyCount; idx++) {
+            int j = activeEnemies[idx];
+
+            const float enemyX = gameState->enemies[j].x;
+            const float enemyY = gameState->enemies[j].y;
+            const float enemyRight = enemyX + gameState->enemies[j].width;
+            const float enemyBottom = enemyY + gameState->enemies[j].height;
+
+            // AABB collision with early rejection
+            if (bulletRight < enemyX || bulletX > enemyRight ||
+                bulletBottom < enemyY || bulletY > enemyBottom) {
+                continue;  // No collision, skip to next
+            }
+
+            // Collision detected
+            {
                         
-                        gameState->enemies[j].health--;
-                        gameState->bullets[i].active = false;
-                        
-                        if (gameState->enemies[j].health <= 0) {
-                            gameState->player.score += gameState->enemies[j].score;
-                            
-                            createExplosion(gameState, gameState->enemies[j].x, gameState->enemies[j].y, 
-                                           gameState->enemies[j].width * 1.5f);
-                            
-                            if (gameState->enemies[j].type == ENEMY_BOSS) {
-                                gameState->level.bossDefeated = true;
-                                
-                                spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
-                            }
-                            
-                            if (gameState->enemies[j].type != ENEMY_BOSS && rand() % 100 < 10) {
-                                spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
-                            }
-                            
-                            gameState->enemies[j].active = false;
-                        }
-                        break;
+                gameState->enemies[j].health--;
+                gameState->bullets[i].active = false;
+
+                if (gameState->enemies[j].health <= 0) {
+                    gameState->player.score += gameState->enemies[j].score;
+
+                    createExplosion(gameState, enemyX, enemyY,
+                                   gameState->enemies[j].width * 1.5f);
+
+                    if (gameState->enemies[j].type == ENEMY_BOSS) {
+                        gameState->level.bossDefeated = true;
+                        spawnPowerup(gameState, enemyX, enemyY);
+                    } else if (rand() % 100 < 10) {
+                        spawnPowerup(gameState, enemyX, enemyY);
                     }
+
+                    gameState->enemies[j].active = false;
                 }
+                break;
             }
         }
     }
