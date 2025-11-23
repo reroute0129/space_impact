@@ -601,31 +601,66 @@ void spawnPowerup(GameState* gameState, float x, float y) {
 }
 
 void createExplosion(GameState* gameState, float x, float y, float size) {
+    int index = -1;
+
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
         if (!gameState->explosions[i].active) {
-            if (x < size / 2) {
-                x = size / 2;
-            } else if (x > SCREEN_WIDTH - size / 2) {
-                x = SCREEN_WIDTH - size / 2;
-            }
-            
-            if (y < size / 2) {
-                y = size / 2;
-            } else if (y > SCREEN_HEIGHT - size) {
-                y = SCREEN_HEIGHT - size;
-            }
-            
-            gameState->explosions[i].x = x;
-            gameState->explosions[i].y = y;
-            gameState->explosions[i].width = size;
-            gameState->explosions[i].height = size;
-            gameState->explosions[i].lifespan = 0.5f;
-            gameState->explosions[i].currentLife = 0.5f;
-            gameState->explosions[i].active = true;
-            gameState->explosions[i].persistent = false;
+            index = i;
             break;
         }
     }
+
+    if (index < 0 && gameState->benchmarkMode) {
+        float lowestLife = 1e9f;
+        int best = -1;
+
+        for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+            if (!gameState->explosions[i].persistent) {
+                float life = gameState->explosions[i].currentLife;
+                if (life < lowestLife) {
+                    lowestLife = life;
+                    best = i;
+                }
+            }
+        }
+
+        if (best < 0) {
+            for (int i = 0; i < MAX_EXPLOSIONS; i++) {
+                float life = gameState->explosions[i].currentLife;
+                if (life < lowestLife) {
+                    lowestLife = life;
+                    best = i;
+                }
+            }
+        }
+
+        index = best;
+    }
+
+    if (index < 0) {
+        return;
+    }
+
+    if (x < size / 2) {
+        x = size / 2;
+    } else if (x > SCREEN_WIDTH - size / 2) {
+        x = SCREEN_WIDTH - size / 2;
+    }
+    
+    if (y < size / 2) {
+        y = size / 2;
+    } else if (y > SCREEN_HEIGHT - size) {
+        y = SCREEN_HEIGHT - size;
+    }
+
+    gameState->explosions[index].x = x;
+    gameState->explosions[index].y = y;
+    gameState->explosions[index].width = size;
+    gameState->explosions[index].height = size;
+    gameState->explosions[index].lifespan = 0.5f;
+    gameState->explosions[index].currentLife = 0.5f;
+    gameState->explosions[index].active = true;
+    gameState->explosions[index].persistent = false;
 }
 
 void handleCollisions(GameState* gameState) {

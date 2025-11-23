@@ -3,11 +3,11 @@
 
 #include <stdbool.h>
 
-#define MAX_BULLETS 2250
-#define MAX_ENEMIES 2250
-#define MAX_ENEMY_BULLETS 2250
-#define MAX_POWERUPS 2250
-#define MAX_EXPLOSIONS 1200
+#define MAX_BULLETS 2500
+#define MAX_ENEMIES 2500
+#define MAX_ENEMY_BULLETS 2500
+#define MAX_POWERUPS 2500
+#define MAX_EXPLOSIONS 1000
 
 typedef enum {
     DIR_NONE,
