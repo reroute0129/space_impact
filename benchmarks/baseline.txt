@@ -53,3 +53,57 @@ Avg FPS: 213.00
 Min FPS: 103.77
 Max FPS: 246.69
 
+=== After Loop Invariant Code Motion ===
+
+========================================
+Density: 25%
+========================================
+[Benchmark] density=25, warmup=2.00s, duration=10.00s
+
+Benchmark results
+Frames: 6342
+Measured time: 9.999 s
+Avg FPS: 634.27
+1% low FPS: 242.69
+Min FPS: 211.22
+Max FPS: 937.10
+
+========================================
+Density: 50%
+========================================
+[Benchmark] density=50, warmup=2.00s, duration=10.00s
+
+Benchmark results
+Frames: 3289
+Measured time: 10.001 s
+Avg FPS: 328.88
+1% low FPS: 142.07
+Min FPS: 129.00
+Max FPS: 397.98
+
+========================================
+Density: 75%
+========================================
+[Benchmark] density=75, warmup=2.00s, duration=10.00s
+
+Benchmark results
+Frames: 2579
+Measured time: 10.001 s
+Avg FPS: 257.87
+1% low FPS: 176.16
+Min FPS: 161.33
+Max FPS: 328.97
+
+========================================
+Density: 100%
+========================================
+[Benchmark] density=100, warmup=2.00s, duration=10.00s
+
+Benchmark results
+Frames: 2068
+Measured time: 9.999 s
+Avg FPS: 206.83
+1% low FPS: 111.31
+Min FPS: 102.64
+Max FPS: 243.25
+

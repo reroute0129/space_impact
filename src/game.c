@@ -626,14 +626,29 @@ void createExplosion(GameState* gameState, float x, float y, float size) {
 }
 
 void handleCollisions(GameState* gameState) {
+    // Loop invariant code motion: cache player coordinates
+    const float playerX = gameState->player.x;
+    const float playerY = gameState->player.y;
+    const float playerWidth = gameState->player.width;
+    const float playerHeight = gameState->player.height;
+    const float playerRight = playerX + playerWidth;
+    const float playerBottom = playerY + playerHeight;
+
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (gameState->bullets[i].active) {
+            // Hoist bullet bounds calculation
+            const float bulletX = gameState->bullets[i].x;
+            const float bulletY = gameState->bullets[i].y;
+            const float bulletRight = bulletX + gameState->bullets[i].width;
+            const float bulletBottom = bulletY + gameState->bullets[i].height;
+
             for (int j = 0; j < MAX_ENEMIES; j++) {
                 if (gameState->enemies[j].active) {
-                    if (gameState->bullets[i].x < gameState->enemies[j].x + gameState->enemies[j].width &&
-                        gameState->bullets[i].x + gameState->bullets[i].width > gameState->enemies[j].x &&
-                        gameState->bullets[i].y < gameState->enemies[j].y + gameState->enemies[j].height &&
-                        gameState->bullets[i].y + gameState->bullets[i].height > gameState->enemies[j].y) {
+                    // Use pre-calculated bullet bounds
+                    if (bulletX < gameState->enemies[j].x + gameState->enemies[j].width &&
+                        bulletRight > gameState->enemies[j].x &&
+                        bulletY < gameState->enemies[j].y + gameState->enemies[j].height &&
+                        bulletBottom > gameState->enemies[j].y) {
                         
                         gameState->enemies[j].health--;
                         gameState->bullets[i].active = false;
@@ -665,10 +680,11 @@ void handleCollisions(GameState* gameState) {
     
     for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
         if (gameState->enemyBullets[i].active) {
-            if (gameState->enemyBullets[i].x < gameState->player.x + gameState->player.width &&
-                gameState->enemyBullets[i].x + gameState->enemyBullets[i].width > gameState->player.x &&
-                gameState->enemyBullets[i].y < gameState->player.y + gameState->player.height &&
-                gameState->enemyBullets[i].y + gameState->enemyBullets[i].height > gameState->player.y) {
+            // Use pre-calculated player bounds
+            if (gameState->enemyBullets[i].x < playerRight &&
+                gameState->enemyBullets[i].x + gameState->enemyBullets[i].width > playerX &&
+                gameState->enemyBullets[i].y < playerBottom &&
+                gameState->enemyBullets[i].y + gameState->enemyBullets[i].height > playerY) {
                 
                 gameState->player.lives--;
                 gameState->enemyBullets[i].active = false;
@@ -684,10 +700,11 @@ void handleCollisions(GameState* gameState) {
     
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (gameState->enemies[i].active) {
-            if (gameState->enemies[i].x < gameState->player.x + gameState->player.width &&
-                gameState->enemies[i].x + gameState->enemies[i].width > gameState->player.x &&
-                gameState->enemies[i].y < gameState->player.y + gameState->player.height &&
-                gameState->enemies[i].y + gameState->enemies[i].height > gameState->player.y) {
+            // Use pre-calculated player bounds
+            if (gameState->enemies[i].x < playerRight &&
+                gameState->enemies[i].x + gameState->enemies[i].width > playerX &&
+                gameState->enemies[i].y < playerBottom &&
+                gameState->enemies[i].y + gameState->enemies[i].height > playerY) {
                 
                 gameState->player.lives--;
                 
@@ -709,10 +726,11 @@ void handleCollisions(GameState* gameState) {
     
     for (int i = 0; i < MAX_POWERUPS; i++) {
         if (gameState->powerups[i].active) {
-            if (gameState->powerups[i].x < gameState->player.x + gameState->player.width &&
-                gameState->powerups[i].x + gameState->powerups[i].width > gameState->player.x &&
-                gameState->powerups[i].y < gameState->player.y + gameState->player.height &&
-                gameState->powerups[i].y + gameState->powerups[i].height > gameState->player.y) {
+            // Use pre-calculated player bounds
+            if (gameState->powerups[i].x < playerRight &&
+                gameState->powerups[i].x + gameState->powerups[i].width > playerX &&
+                gameState->powerups[i].y < playerBottom &&
+                gameState->powerups[i].y + gameState->powerups[i].height > playerY) {
                 
                 switch (gameState->powerups[i].type) {
                     case POWERUP_HEALTH:
