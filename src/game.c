@@ -6,6 +6,130 @@
 
 static void respawnEnemyRight(GameState* gameState, int idx);
 
+// Simple uniform grid for broad-phase collision between bullets and enemies
+#define GRID_CELL_SIZE 32
+// Use fixed screen size here to avoid macro order issues
+#define GRID_COLS ((480 + GRID_CELL_SIZE - 1) / GRID_CELL_SIZE)
+#define GRID_ROWS ((320 + GRID_CELL_SIZE - 1) / GRID_CELL_SIZE)
+#define GRID_MAX_PER_CELL 64
+
+static int enemyGrid[GRID_ROWS][GRID_COLS][GRID_MAX_PER_CELL];
+static int enemyGridCount[GRID_ROWS][GRID_COLS];
+
+static int enemyBulletGrid[GRID_ROWS][GRID_COLS][GRID_MAX_PER_CELL];
+static int enemyBulletGridCount[GRID_ROWS][GRID_COLS];
+
+static int powerupGrid[GRID_ROWS][GRID_COLS][GRID_MAX_PER_CELL];
+static int powerupGridCount[GRID_ROWS][GRID_COLS];
+
+static int clampInt(int v, int min, int max) {
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
+}
+
+static void buildEnemyGrid(GameState* gameState) {
+    for (int r = 0; r < GRID_ROWS; r++) {
+        for (int c = 0; c < GRID_COLS; c++) {
+            enemyGridCount[r][c] = 0;
+        }
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (!gameState->enemies[i].active) {
+            continue;
+        }
+
+        float exMin = gameState->enemies[i].x;
+        float exMax = gameState->enemies[i].x + gameState->enemies[i].width;
+        float eyMin = gameState->enemies[i].y;
+        float eyMax = gameState->enemies[i].y + gameState->enemies[i].height;
+
+        int colStart = clampInt((int)(exMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(exMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(eyMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(eyMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = enemyGridCount[r][c];
+                if (count < GRID_MAX_PER_CELL) {
+                    enemyGrid[r][c][count] = i;
+                    enemyGridCount[r][c] = count + 1;
+                }
+            }
+        }
+    }
+}
+
+static void buildEnemyBulletGrid(GameState* gameState) {
+    for (int r = 0; r < GRID_ROWS; r++) {
+        for (int c = 0; c < GRID_COLS; c++) {
+            enemyBulletGridCount[r][c] = 0;
+        }
+    }
+
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (!gameState->enemyBullets[i].active) {
+            continue;
+        }
+
+        float bxMin = gameState->enemyBullets[i].x;
+        float bxMax = gameState->enemyBullets[i].x + gameState->enemyBullets[i].width;
+        float byMin = gameState->enemyBullets[i].y;
+        float byMax = gameState->enemyBullets[i].y + gameState->enemyBullets[i].height;
+
+        int colStart = clampInt((int)(bxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(bxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(byMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(byMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = enemyBulletGridCount[r][c];
+                if (count < GRID_MAX_PER_CELL) {
+                    enemyBulletGrid[r][c][count] = i;
+                    enemyBulletGridCount[r][c] = count + 1;
+                }
+            }
+        }
+    }
+}
+
+static void buildPowerupGrid(GameState* gameState) {
+    for (int r = 0; r < GRID_ROWS; r++) {
+        for (int c = 0; c < GRID_COLS; c++) {
+            powerupGridCount[r][c] = 0;
+        }
+    }
+
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (!gameState->powerups[i].active) {
+            continue;
+        }
+
+        float pxMin = gameState->powerups[i].x;
+        float pxMax = gameState->powerups[i].x + gameState->powerups[i].width;
+        float pyMin = gameState->powerups[i].y;
+        float pyMax = gameState->powerups[i].y + gameState->powerups[i].height;
+
+        int colStart = clampInt((int)(pxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(pxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(pyMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(pyMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = powerupGridCount[r][c];
+                if (count < GRID_MAX_PER_CELL) {
+                    powerupGrid[r][c][count] = i;
+                    powerupGridCount[r][c] = count + 1;
+                }
+            }
+        }
+    }
+}
+
 #define PLAYER_SPEED 150.0f
 #define BULLET_SPEED 300.0f
 #define ENEMY_BULLET_SPEED 200.0f
@@ -664,126 +788,217 @@ void createExplosion(GameState* gameState, float x, float y, float size) {
 }
 
 void handleCollisions(GameState* gameState) {
+    buildEnemyGrid(gameState);
+    buildEnemyBulletGrid(gameState);
+    buildPowerupGrid(gameState);
+
+    bool enemyPlayerChecked[MAX_ENEMIES] = {false};
+
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (gameState->bullets[i].active) {
-            for (int j = 0; j < MAX_ENEMIES; j++) {
-                if (gameState->enemies[j].active) {
-                    if (gameState->bullets[i].x < gameState->enemies[j].x + gameState->enemies[j].width &&
-                        gameState->bullets[i].x + gameState->bullets[i].width > gameState->enemies[j].x &&
-                        gameState->bullets[i].y < gameState->enemies[j].y + gameState->enemies[j].height &&
-                        gameState->bullets[i].y + gameState->bullets[i].height > gameState->enemies[j].y) {
-                        
-                        gameState->enemies[j].health--;
-                        gameState->bullets[i].active = false;
-                        
-                        if (gameState->enemies[j].health <= 0) {
-                            gameState->player.score += gameState->enemies[j].score;
-                            
-                            createExplosion(gameState, gameState->enemies[j].x, gameState->enemies[j].y, 
-                                           gameState->enemies[j].width * 1.5f);
-                            
-                            if (gameState->enemies[j].type == ENEMY_BOSS) {
-                                if (!gameState->benchmarkMode) {
-                                    gameState->level.bossDefeated = true;
-                                    spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
-                                } else {
+            float bxMin = gameState->bullets[i].x;
+            float bxMax = gameState->bullets[i].x + gameState->bullets[i].width;
+            float byMin = gameState->bullets[i].y;
+            float byMax = gameState->bullets[i].y + gameState->bullets[i].height;
+
+            int colStart = clampInt((int)(bxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+            int colEnd   = clampInt((int)(bxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+            int rowStart = clampInt((int)(byMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+            int rowEnd   = clampInt((int)(byMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+            for (int r = rowStart; r <= rowEnd && gameState->bullets[i].active; r++) {
+                for (int c = colStart; c <= colEnd && gameState->bullets[i].active; c++) {
+                    int count = enemyGridCount[r][c];
+                    for (int idx = 0; idx < count && gameState->bullets[i].active; idx++) {
+                        int j = enemyGrid[r][c][idx];
+                        if (!gameState->enemies[j].active) {
+                            continue;
+                        }
+
+                        if (gameState->bullets[i].x < gameState->enemies[j].x + gameState->enemies[j].width &&
+                            gameState->bullets[i].x + gameState->bullets[i].width > gameState->enemies[j].x &&
+                            gameState->bullets[i].y < gameState->enemies[j].y + gameState->enemies[j].height &&
+                            gameState->bullets[i].y + gameState->bullets[i].height > gameState->enemies[j].y) {
+
+                            gameState->enemies[j].health--;
+                            gameState->bullets[i].active = false;
+
+                            if (gameState->enemies[j].health <= 0) {
+                                gameState->player.score += gameState->enemies[j].score;
+
+                                createExplosion(gameState, gameState->enemies[j].x, gameState->enemies[j].y,
+                                                gameState->enemies[j].width * 1.5f);
+
+                                if (gameState->enemies[j].type == ENEMY_BOSS) {
+                                    if (!gameState->benchmarkMode) {
+                                        gameState->level.bossDefeated = true;
+                                        spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
+                                    } else {
+                                        spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
+                                    }
+                                }
+
+                                if (gameState->enemies[j].type != ENEMY_BOSS && rand() % 100 < 10) {
                                     spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
                                 }
+
+                                if (gameState->benchmarkMode) {
+                                    respawnEnemyRight(gameState, j);
+                                } else {
+                                    gameState->enemies[j].active = false;
+                                }
                             }
-                            
-                            if (gameState->enemies[j].type != ENEMY_BOSS && rand() % 100 < 10) {
-                                spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
-                            }
-                            
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Enemy bullets vs player
+    {
+        float pxMin = gameState->player.x;
+        float pxMax = gameState->player.x + gameState->player.width;
+        float pyMin = gameState->player.y;
+        float pyMax = gameState->player.y + gameState->player.height;
+
+        int colStart = clampInt((int)(pxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(pxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(pyMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(pyMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = enemyBulletGridCount[r][c];
+                for (int idx = 0; idx < count; idx++) {
+                    int i = enemyBulletGrid[r][c][idx];
+                    if (!gameState->enemyBullets[i].active) {
+                        continue;
+                    }
+
+                    if (gameState->enemyBullets[i].x < gameState->player.x + gameState->player.width &&
+                        gameState->enemyBullets[i].x + gameState->enemyBullets[i].width > gameState->player.x &&
+                        gameState->enemyBullets[i].y < gameState->player.y + gameState->player.height &&
+                        gameState->enemyBullets[i].y + gameState->enemyBullets[i].height > gameState->player.y) {
+
+                        if (!gameState->benchmarkMode) {
+                            gameState->player.lives--;
+                        }
+                        gameState->enemyBullets[i].active = false;
+
+                        createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
+
+                        gameState->player.isRapidFire = false;
+                        gameState->player.isDoubleBullet = false;
+                        gameState->player.powerupTimer = 0.0f;
+                    }
+                }
+            }
+        }
+    }
+
+    // Enemies vs player
+    {
+        float pxMin = gameState->player.x;
+        float pxMax = gameState->player.x + gameState->player.width;
+        float pyMin = gameState->player.y;
+        float pyMax = gameState->player.y + gameState->player.height;
+
+        int colStart = clampInt((int)(pxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(pxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(pyMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(pyMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = enemyGridCount[r][c];
+                for (int idx = 0; idx < count; idx++) {
+                    int i = enemyGrid[r][c][idx];
+                    if (enemyPlayerChecked[i]) {
+                        continue;
+                    }
+                    enemyPlayerChecked[i] = true;
+
+                    if (!gameState->enemies[i].active) {
+                        continue;
+                    }
+
+                    if (gameState->enemies[i].x < gameState->player.x + gameState->player.width &&
+                        gameState->enemies[i].x + gameState->enemies[i].width > gameState->player.x &&
+                        gameState->enemies[i].y < gameState->player.y + gameState->player.height &&
+                        gameState->enemies[i].y + gameState->enemies[i].height > gameState->player.y) {
+
+                        if (!gameState->benchmarkMode) {
+                            gameState->player.lives--;
+                        }
+
+                        createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
+                        createExplosion(gameState, gameState->enemies[i].x, gameState->enemies[i].y, gameState->enemies[i].width);
+
+                        if (gameState->enemies[i].type != ENEMY_BOSS) {
                             if (gameState->benchmarkMode) {
-                                respawnEnemyRight(gameState, j);
+                                respawnEnemyRight(gameState, i);
                             } else {
-                                gameState->enemies[j].active = false;
+                                gameState->enemies[i].active = false;
                             }
+                        } else {
+                            gameState->player.x = 50.0f;
                         }
-                        break;
+
+                        gameState->player.isRapidFire = false;
+                        gameState->player.isDoubleBullet = false;
+                        gameState->player.powerupTimer = 0.0f;
                     }
                 }
             }
         }
     }
-    
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-        if (gameState->enemyBullets[i].active) {
-            if (gameState->enemyBullets[i].x < gameState->player.x + gameState->player.width &&
-                gameState->enemyBullets[i].x + gameState->enemyBullets[i].width > gameState->player.x &&
-                gameState->enemyBullets[i].y < gameState->player.y + gameState->player.height &&
-                gameState->enemyBullets[i].y + gameState->enemyBullets[i].height > gameState->player.y) {
-                
-                if (!gameState->benchmarkMode) {
-                    gameState->player.lives--;
-                }
-                gameState->enemyBullets[i].active = false;
-                
-                createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
-                
-                gameState->player.isRapidFire = false;
-                gameState->player.isDoubleBullet = false;
-                gameState->player.powerupTimer = 0.0f;
-            }
-        }
-    }
-    
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (gameState->enemies[i].active) {
-            if (gameState->enemies[i].x < gameState->player.x + gameState->player.width &&
-                gameState->enemies[i].x + gameState->enemies[i].width > gameState->player.x &&
-                gameState->enemies[i].y < gameState->player.y + gameState->player.height &&
-                gameState->enemies[i].y + gameState->enemies[i].height > gameState->player.y) {
-                
-                if (!gameState->benchmarkMode) {
-                    gameState->player.lives--;
-                }
-                
-                createExplosion(gameState, gameState->player.x, gameState->player.y, gameState->player.width);
-                createExplosion(gameState, gameState->enemies[i].x, gameState->enemies[i].y, gameState->enemies[i].width);
-                
-                if (gameState->enemies[i].type != ENEMY_BOSS) {
-                    if (gameState->benchmarkMode) {
-                        respawnEnemyRight(gameState, i);
-                    } else {
-                        gameState->enemies[i].active = false;
+
+    // Powerups vs player
+    {
+        float pxMin = gameState->player.x;
+        float pxMax = gameState->player.x + gameState->player.width;
+        float pyMin = gameState->player.y;
+        float pyMax = gameState->player.y + gameState->player.height;
+
+        int colStart = clampInt((int)(pxMin / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int colEnd   = clampInt((int)(pxMax / GRID_CELL_SIZE), 0, GRID_COLS - 1);
+        int rowStart = clampInt((int)(pyMin / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+        int rowEnd   = clampInt((int)(pyMax / GRID_CELL_SIZE), 0, GRID_ROWS - 1);
+
+        for (int r = rowStart; r <= rowEnd; r++) {
+            for (int c = colStart; c <= colEnd; c++) {
+                int count = powerupGridCount[r][c];
+                for (int idx = 0; idx < count; idx++) {
+                    int i = powerupGrid[r][c][idx];
+                    if (!gameState->powerups[i].active) {
+                        continue;
                     }
-                } else {
-                    gameState->player.x = 50.0f;
-                }
-                
-                gameState->player.isRapidFire = false;
-                gameState->player.isDoubleBullet = false;
-                gameState->player.powerupTimer = 0.0f;
-            }
-        }
-    }
-    
-    for (int i = 0; i < MAX_POWERUPS; i++) {
-        if (gameState->powerups[i].active) {
-            if (gameState->powerups[i].x < gameState->player.x + gameState->player.width &&
-                gameState->powerups[i].x + gameState->powerups[i].width > gameState->player.x &&
-                gameState->powerups[i].y < gameState->player.y + gameState->player.height &&
-                gameState->powerups[i].y + gameState->powerups[i].height > gameState->player.y) {
-                
-                switch (gameState->powerups[i].type) {
-                    case POWERUP_HEALTH:
-                        if (gameState->player.lives < 3) {
-                            gameState->player.lives++;
+
+                    if (gameState->powerups[i].x < gameState->player.x + gameState->player.width &&
+                        gameState->powerups[i].x + gameState->powerups[i].width > gameState->player.x &&
+                        gameState->powerups[i].y < gameState->player.y + gameState->player.height &&
+                        gameState->powerups[i].y + gameState->powerups[i].height > gameState->player.y) {
+
+                        switch (gameState->powerups[i].type) {
+                            case POWERUP_HEALTH:
+                                if (gameState->player.lives < 3) {
+                                    gameState->player.lives++;
+                                }
+                                break;
+                            case POWERUP_RAPID_FIRE:
+                                gameState->player.isRapidFire = true;
+                                gameState->player.powerupTimer = POWERUP_DURATION;
+                                break;
+                            case POWERUP_DOUBLE_BULLET:
+                                gameState->player.isDoubleBullet = true;
+                                gameState->player.powerupTimer = POWERUP_DURATION;
+                                break;
                         }
-                        break;
-                    case POWERUP_RAPID_FIRE:
-                        gameState->player.isRapidFire = true;
-                        gameState->player.powerupTimer = POWERUP_DURATION;
-                        break;
-                    case POWERUP_DOUBLE_BULLET:
-                        gameState->player.isDoubleBullet = true;
-                        gameState->player.powerupTimer = POWERUP_DURATION;
-                        break;
+
+                        gameState->powerups[i].active = false;
+                    }
                 }
-                
-                gameState->powerups[i].active = false;
             }
         }
     }
