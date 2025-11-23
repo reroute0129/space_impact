@@ -12,8 +12,8 @@
 #include "renderer.h"
 #include "resources.h"
 
-#define WINDOW_WIDTH 1920
-#define WINDOW_HEIGHT 1200
+#define WINDOW_WIDTH 960
+#define WINDOW_HEIGHT 640
 
 GameState gameState;
 GLFWwindow* window;
@@ -93,6 +93,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    (void)window;
     glViewport(0, 0, width, height);
 }
 
@@ -123,7 +124,10 @@ bool initOpenGL() {
         return false;
     }
 
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    // Get actual framebuffer size (handles Retina displays correctly)
+    int fbWidth, fbHeight;
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+    glViewport(0, 0, fbWidth, fbHeight);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
