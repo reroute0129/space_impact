@@ -77,7 +77,7 @@ void updateGame(GameState* gameState, float deltaTime) {
         return;
     }
 
-    float diagonalFactor = 0.7071f; 
+    const float diagonalFactor = 0.7071067811865476f;  // sqrt(2)/2 precomputed 
     
     switch (gameState->player.direction) {
         case DIR_UP:
@@ -112,14 +112,18 @@ void updateGame(GameState* gameState, float deltaTime) {
             break;
     }
     
-    if (gameState->player.x < gameState->player.width / 2) {
-        gameState->player.x = gameState->player.width / 2;
-    } else if (gameState->player.x > SCREEN_WIDTH - gameState->player.width / 2) {
-        gameState->player.x = SCREEN_WIDTH - gameState->player.width / 2;
+    // Strength reduction: replace division with multiplication
+    const float halfWidth = gameState->player.width * 0.5f;
+    const float halfHeight = gameState->player.height * 0.5f;
+
+    if (gameState->player.x < halfWidth) {
+        gameState->player.x = halfWidth;
+    } else if (gameState->player.x > SCREEN_WIDTH - halfWidth) {
+        gameState->player.x = SCREEN_WIDTH - halfWidth;
     }
-    
-    if (gameState->player.y < gameState->player.height / 2) {
-        gameState->player.y = gameState->player.height / 2;
+
+    if (gameState->player.y < halfHeight) {
+        gameState->player.y = halfHeight;
     } else if (gameState->player.y > SCREEN_HEIGHT - gameState->player.height) {
         gameState->player.y = SCREEN_HEIGHT - gameState->player.height;
     }
@@ -367,13 +371,6 @@ void updateGame(GameState* gameState, float deltaTime) {
     if (!gameState->benchmarkMode) {
         gameState->enemySpawnTimer -= deltaTime;
         if (gameState->enemySpawnTimer <= 0 && !gameState->level.bossSpawned) {
-            int enemyCount = 0;
-            for (int i = 0; i < MAX_ENEMIES; i++) {
-                if (gameState->enemies[i].active) {
-                    enemyCount++;
-                }
-            }
-            
             if (gameState->player.score >= gameState->level.number * 10) {
                 spawnBoss(gameState);
                 gameState->level.bossSpawned = true;
