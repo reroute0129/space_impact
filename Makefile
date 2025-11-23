@@ -1,6 +1,7 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g -std=c99 -I$(HOME)/local/include -I./include
-LDFLAGS = -L$(HOME)/local/lib -lGL -lGLEW -lglfw -lm
+BREW_PREFIX = $(shell brew --prefix)
+CFLAGS = -Wall -Wextra -g -std=c99 -I$(BREW_PREFIX)/include -I./include
+LDFLAGS = -L$(BREW_PREFIX)/lib -lGLEW -lglfw -framework OpenGL -framework Cocoa -framework IOKit -lm
 
 SRC_DIR = src
 INCLUDE_DIR = include
