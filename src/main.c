@@ -11,6 +11,7 @@
 #include "game.h"
 #include "renderer.h"
 #include "resources.h"
+#include "rng.h"
 
 #define WINDOW_WIDTH 960
 #define WINDOW_HEIGHT 640
@@ -169,7 +170,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    srand((unsigned)time(NULL));
+    rng_seed((uint32_t)time(NULL));
 
     if (!initOpenGL()) {
         return -1;

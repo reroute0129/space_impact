@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "game.h"
+#include "rng.h"
 
 static void respawnEnemyRight(GameState* gameState, int idx);
 
@@ -274,12 +275,12 @@ void updateGame(GameState* gameState, float deltaTime) {
                     gameState->bullets[i].x = SCREEN_WIDTH - gameState->bullets[i].width / 2.0f;
                     float minY = BULLET_HEIGHT / 2.0f;
                     float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
-                    gameState->bullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                    gameState->bullets[i].y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
                 } else if (gameState->bullets[i].speed > 0.0f && gameState->bullets[i].x > offRight) {
                     gameState->bullets[i].x = gameState->bullets[i].width / 2.0f;
                     float minY = BULLET_HEIGHT / 2.0f;
                     float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
-                    gameState->bullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                    gameState->bullets[i].y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
                 }
             } else {
                 if (gameState->bullets[i].x > SCREEN_WIDTH + gameState->bullets[i].width) {
@@ -302,7 +303,7 @@ void updateGame(GameState* gameState, float deltaTime) {
                     gameState->enemyBullets[i].x = SCREEN_WIDTH - gameState->enemyBullets[i].width / 2.0f;
                     float minY = BULLET_HEIGHT / 2.0f;
                     float maxY = SCREEN_HEIGHT - BULLET_HEIGHT;
-                    gameState->enemyBullets[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
+                    gameState->enemyBullets[i].y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
                 }
             } else {
                 if (gameState->enemyBullets[i].x < -gameState->enemyBullets[i].width) {
@@ -328,10 +329,12 @@ void updateGame(GameState* gameState, float deltaTime) {
                 case ENEMY_MEDIUM:
                     gameState->enemies[i].movementPattern -= deltaTime;
                     if (gameState->enemies[i].movementPattern <= 0) {
-                        gameState->enemies[i].speed = (rand() % 2 == 0) ? 
-                            fabs(gameState->enemies[i].speed) : 
-                            -fabs(gameState->enemies[i].speed);
-                        gameState->enemies[i].movementPattern = (rand() % 3) + 1.0f;
+                        if ((rng_u32() & 1u) != 0u) {
+                            gameState->enemies[i].speed = fabs(gameState->enemies[i].speed);
+                        } else {
+                            gameState->enemies[i].speed = -fabs(gameState->enemies[i].speed);
+                        }
+                        gameState->enemies[i].movementPattern = (float)(rng_u32() % 3u) + 1.0f;
                     }
                     gameState->enemies[i].y += gameState->enemies[i].speed * 0.3f * deltaTime;
                     break;
@@ -438,12 +441,12 @@ void updateGame(GameState* gameState, float deltaTime) {
                     if (bandFrac <= 0.0f) bandFrac = 0.10f;
                     if (bandFrac > 1.0f) bandFrac = 1.0f;
                     float band = SCREEN_WIDTH * bandFrac;
-                    float jitter = (float)(rand() % (int)(band + 1));
+                    float jitter = (float)(rng_u32() % (uint32_t)(band + 1.0f));
                     gameState->enemies[i].x = (SCREEN_WIDTH - gameState->enemies[i].width / 2.0f) - jitter;
-                    gameState->enemies[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
-                    gameState->enemies[i].movementPattern = (float)(rand() % 628) / 100.0f;
+                    gameState->enemies[i].y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
+                    gameState->enemies[i].movementPattern = (float)(rng_u32() % 628u) / 100.0f;
                     if (gameState->enemies[i].type == ENEMY_LARGE || gameState->enemies[i].type == ENEMY_BOSS) {
-                        gameState->enemies[i].bulletCooldown = (rand() % 3) * 0.5f + 0.2f;
+                        gameState->enemies[i].bulletCooldown = (float)(rng_u32() % 3u) * 0.5f + 0.2f;
                     }
                 }
             }
@@ -469,8 +472,8 @@ void updateGame(GameState* gameState, float deltaTime) {
                     gameState->powerups[i].x = SCREEN_WIDTH - gameState->powerups[i].width / 2.0f;
                     float minY = gameState->powerups[i].height / 2.0f;
                     float maxY = SCREEN_HEIGHT - gameState->powerups[i].height;
-                    gameState->powerups[i].y = minY + (float)(rand() % (int)(maxY - minY + 1));
-                    gameState->powerups[i].type = (PowerupType)(rand() % 3);
+                    gameState->powerups[i].y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
+                    gameState->powerups[i].type = (PowerupType)(rng_u32() % 3u);
                 }
             }
         }
@@ -504,7 +507,7 @@ void updateGame(GameState* gameState, float deltaTime) {
                 gameState->level.bossSpawned = true;
             } else {
                 EnemyType type;
-                int r = rand() % 100;
+                int r = (int)(rng_u32() % 100u);
                 if (r < 60) {
                     type = ENEMY_SMALL;
                 } else if (r < 85) {
@@ -526,7 +529,7 @@ void updateGame(GameState* gameState, float deltaTime) {
             
             float minY = POWERUP_HEIGHT / 2;
             float maxY = SCREEN_HEIGHT - POWERUP_HEIGHT;
-            float y = (rand() % (int)(maxY - minY)) + minY;
+            float y = (float)(rng_u32() % (uint32_t)(maxY - minY)) + minY;
             
             spawnPowerup(gameState, x, y);
             gameState->powerupSpawnTimer = POWERUP_SPAWN_DELAY;
@@ -624,12 +627,12 @@ void spawnEnemy(GameState* gameState, EnemyType type) {
             
             float minY = enemyHeight / 2;
             float maxY = SCREEN_HEIGHT - enemyHeight;
-            float spawnY = (rand() % (int)(maxY - minY)) + minY;
+            float spawnY = (float)(rng_u32() % (uint32_t)(maxY - minY)) + minY;
             
             gameState->enemies[i].y = spawnY;
             gameState->enemies[i].active = true;
             gameState->enemies[i].type = type;
-            gameState->enemies[i].movementPattern = (float)(rand() % 628) / 100.0f; 
+            gameState->enemies[i].movementPattern = (float)(rng_u32() % 628u) / 100.0f; 
             
             switch (type) {
                 case ENEMY_SMALL:
@@ -652,7 +655,7 @@ void spawnEnemy(GameState* gameState, EnemyType type) {
                     gameState->enemies[i].speed = 40.0f + (gameState->level.number * 2.0f);
                     gameState->enemies[i].health = 3;
                     gameState->enemies[i].score = 150;
-                    gameState->enemies[i].bulletCooldown = (rand() % 3) + 1.0f;
+                    gameState->enemies[i].bulletCooldown = (float)(rng_u32() % 3u) + 1.0f;
                     break;
                 case ENEMY_BOSS:
                     gameState->enemies[i].width = 64;
@@ -713,8 +716,8 @@ void spawnPowerup(GameState* gameState, float x, float y) {
             gameState->powerups[i].speed = 60.0f;
             gameState->powerups[i].active = true;
             
-            int type = rand() % 3;
-            if (gameState->player.lives < 3 && rand() % 100 < 40) {
+            int type = (int)(rng_u32() % 3u);
+            if (gameState->player.lives < 3 && (rng_u32() % 100u) < 40u) {
                 gameState->powerups[i].type = POWERUP_HEALTH;
             } else {
                 gameState->powerups[i].type = (PowerupType)type;
@@ -838,7 +841,7 @@ void handleCollisions(GameState* gameState) {
                                     }
                                 }
 
-                                if (gameState->enemies[j].type != ENEMY_BOSS && rand() % 100 < 10) {
+                                if (gameState->enemies[j].type != ENEMY_BOSS && (rng_u32() % 100u) < 10u) {
                                     spawnPowerup(gameState, gameState->enemies[j].x, gameState->enemies[j].y);
                                 }
 
@@ -1031,16 +1034,16 @@ static void respawnEnemyRight(GameState* gameState, int idx) {
     if (bandFrac <= 0.0f) bandFrac = 0.10f;
     if (bandFrac > 1.0f) bandFrac = 1.0f;
     float band = SCREEN_WIDTH * bandFrac;
-    float jitter = (float)(rand() % (int)(band + 1));
+    float jitter = (float)(rng_u32() % (uint32_t)(band + 1.0f));
 
     Enemy* e = &gameState->enemies[idx];
     float minY = e->height / 2.0f;
     float maxY = SCREEN_HEIGHT - e->height;
     e->x = (SCREEN_WIDTH - e->width / 2.0f) - jitter;
-    e->y = minY + (float)(rand() % (int)(maxY - minY + 1));
-    e->movementPattern = (float)(rand() % 628) / 100.0f;
+    e->y = minY + (float)(rng_u32() % (uint32_t)(maxY - minY + 1.0f));
+    e->movementPattern = (float)(rng_u32() % 628u) / 100.0f;
     if (e->type == ENEMY_LARGE) {
-        e->bulletCooldown = (rand() % 3) * 0.5f + 0.2f;
+        e->bulletCooldown = (float)(rng_u32() % 3u) * 0.5f + 0.2f;
     } else if (e->type == ENEMY_BOSS) {
         e->bulletCooldown = 0.5f;
     }
@@ -1079,8 +1082,8 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             gameState->bullets[i].width = BULLET_WIDTH;
             gameState->bullets[i].height = BULLET_HEIGHT;
             gameState->bullets[i].speed = -BULLET_SPEED;
-            gameState->bullets[i].x = (float)(rand() % SCREEN_WIDTH);
-            gameState->bullets[i].y = (float)(rand() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
+            gameState->bullets[i].x = (float)(rng_u32() % SCREEN_WIDTH);
+            gameState->bullets[i].y = (float)(rng_u32() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
         } else {
             gameState->bullets[i].active = false;
         }
@@ -1092,8 +1095,8 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             gameState->enemyBullets[i].width = BULLET_WIDTH;
             gameState->enemyBullets[i].height = BULLET_HEIGHT;
             gameState->enemyBullets[i].speed = ENEMY_BULLET_SPEED;
-            gameState->enemyBullets[i].x = (float)(SCREEN_WIDTH - (rand() % (SCREEN_WIDTH / 2)));
-            gameState->enemyBullets[i].y = (float)(rand() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
+            gameState->enemyBullets[i].x = (float)(SCREEN_WIDTH - (rng_u32() % (SCREEN_WIDTH / 2)));
+            gameState->enemyBullets[i].y = (float)(rng_u32() % (SCREEN_HEIGHT - BULLET_HEIGHT)) + BULLET_HEIGHT / 2.0f;
         } else {
             gameState->enemyBullets[i].active = false;
         }
@@ -1117,13 +1120,13 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             type = ENEMY_BOSS;
             bossesPlaced++;
         } else {
-            int r = rand() % 100;
+            int r = (int)(rng_u32() % 100u);
             if (r < 60) type = ENEMY_SMALL; else if (r < 85) type = ENEMY_MEDIUM; else type = ENEMY_LARGE;
         }
 
         gameState->enemies[i].type = type;
         gameState->enemies[i].active = true;
-        gameState->enemies[i].movementPattern = (float)(rand() % 628) / 100.0f;
+        gameState->enemies[i].movementPattern = (float)(rng_u32() % 628u) / 100.0f;
 
         switch (type) {
             case ENEMY_SMALL:
@@ -1176,16 +1179,16 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             if (bossIndex < 0) bossIndex = 0;
             if (bossTarget < 1) bossTarget = 1;
             float slot = bandWidth / (float)bossTarget;
-            float jitter = slot * 0.2f * ((float)(rand() % 100) / 100.0f);
+            float jitter = slot * 0.2f * ((float)(rng_u32() % 100u) / 100.0f);
             gameState->enemies[i].x = exMin + slot * bossIndex + slot * 0.4f + jitter;
         } else {
             exMin = SCREEN_WIDTH * (1.0f - bandFrac);
             exMax = SCREEN_WIDTH - gameState->enemies[i].width / 2.0f;
-            gameState->enemies[i].x = exMin + (float)(rand() % (int)(exMax - exMin + 1));
+            gameState->enemies[i].x = exMin + (float)(rng_u32() % (uint32_t)(exMax - exMin + 1.0f));
         }
         float eyMin = gameState->enemies[i].height / 2.0f;
         float eyMax = SCREEN_HEIGHT - gameState->enemies[i].height;
-        gameState->enemies[i].y = eyMin + (float)(rand() % (int)(eyMax - eyMin + 1));
+        gameState->enemies[i].y = eyMin + (float)(rng_u32() % (uint32_t)(eyMax - eyMin + 1.0f));
 
         enemiesPlaced++;
     }
@@ -1196,9 +1199,9 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             gameState->powerups[i].width = POWERUP_WIDTH;
             gameState->powerups[i].height = POWERUP_HEIGHT;
             gameState->powerups[i].speed = 60.0f;
-            gameState->powerups[i].type = (PowerupType)(rand() % 3);
-            gameState->powerups[i].x = SCREEN_WIDTH - (float)(rand() % (SCREEN_WIDTH / 3));
-            gameState->powerups[i].y = (float)(rand() % (SCREEN_HEIGHT - POWERUP_HEIGHT)) + POWERUP_HEIGHT / 2.0f;
+            gameState->powerups[i].type = (PowerupType)(rng_u32() % 3u);
+            gameState->powerups[i].x = SCREEN_WIDTH - (float)(rng_u32() % (SCREEN_WIDTH / 3));
+            gameState->powerups[i].y = (float)(rng_u32() % (SCREEN_HEIGHT - POWERUP_HEIGHT)) + POWERUP_HEIGHT / 2.0f;
         } else {
             gameState->powerups[i].active = false;
         }
@@ -1210,10 +1213,10 @@ void prepareBenchmarkScene(GameState* gameState, int density) {
             gameState->explosions[i].width = 24.0f;
             gameState->explosions[i].height = 24.0f;
             gameState->explosions[i].lifespan = 0.6f;
-            gameState->explosions[i].currentLife = 0.6f * (float)(rand() % 100) / 100.0f;
+            gameState->explosions[i].currentLife = 0.6f * (float)(rng_u32() % 100u) / 100.0f;
             gameState->explosions[i].persistent = true;
-            gameState->explosions[i].x = (float)(rand() % SCREEN_WIDTH);
-            gameState->explosions[i].y = (float)(rand() % SCREEN_HEIGHT);
+            gameState->explosions[i].x = (float)(rng_u32() % SCREEN_WIDTH);
+            gameState->explosions[i].y = (float)(rng_u32() % SCREEN_HEIGHT);
         } else {
             gameState->explosions[i].active = false;
             gameState->explosions[i].persistent = false;
