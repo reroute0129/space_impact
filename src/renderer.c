@@ -153,7 +153,6 @@ void destroyRenderer() {
     glDeleteBuffers(1, &renderer.VBO);
     glDeleteBuffers(1, &renderer.EBO);
     glDeleteProgram(renderer.shaderProgram);
-    
     glDeleteTextures(SPRITE_COUNT, renderer.textures);
 }
 
@@ -161,7 +160,7 @@ void setTexture(SpriteType type, GLuint textureID) {
     renderer.textures[type] = textureID;
 }
 
-void renderSprite(SpriteType type, float x, float y, float width, float height, float r, float g, float b, float a) {
+static void drawQuad(float x, float y, float width, float height, float r, float g, float b, float a) {
     float modelMatrix[16] = {
         width, 0.0f, 0.0f, 0.0f,
         0.0f, height, 0.0f, 0.0f,
@@ -174,61 +173,55 @@ void renderSprite(SpriteType type, float x, float y, float width, float height, 
     float color[4] = {r, g, b, a};
     glUniform4fv(renderer.colorLoc, 1, color);
     
-    glBindTexture(GL_TEXTURE_2D, renderer.textures[type]);
-    
-    glBindVertexArray(renderer.VAO);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
 }
 
 void renderGame(GameState* gameState) {
     glClearColor(0.0f, 0.0f, 0.05f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(renderer.shaderProgram);
+    glBindVertexArray(renderer.VAO);
     
     float farScrollPos = fmodf(gameState->level.backgroundOffset, 256.0f);
     
-    renderSprite(SPRITE_BACKGROUND, 256.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
-    
-    renderSprite(SPRITE_BACKGROUND, 512.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
-    
-    renderSprite(SPRITE_BACKGROUND, 768.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
-    
-    renderSprite(SPRITE_BACKGROUND, 0.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_BACKGROUND]);
+    drawQuad(256.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
+    drawQuad(512.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
+    drawQuad(768.0f - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
+    drawQuad(0.0f   - farScrollPos, 160, 256, 320, 0.4f, 0.4f, 0.5f, 0.3f);
 
     float midScrollPos = fmodf(gameState->level.midgroundOffset, 256.0f);
     
-    renderSprite(SPRITE_BACKGROUND, 256.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
-
-    renderSprite(SPRITE_BACKGROUND, 512.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
-    
-    renderSprite(SPRITE_BACKGROUND, 768.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
-    
-    renderSprite(SPRITE_BACKGROUND, 0.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    drawQuad(256.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    drawQuad(512.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    drawQuad(768.0f - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
+    drawQuad(0.0f   - midScrollPos, 160, 256, 320, 0.5f, 0.5f, 0.6f, 0.5f);
     
     float nearScrollPos = fmodf(gameState->level.foregroundOffset, 256.0f);
     
-    renderSprite(SPRITE_BACKGROUND, 256.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    drawQuad(256.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    drawQuad(512.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    drawQuad(768.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    drawQuad(0.0f   - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
     
-    renderSprite(SPRITE_BACKGROUND, 512.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_PLAYER]);
+    drawQuad(gameState->player.x, gameState->player.y, 
+             gameState->player.width, gameState->player.height, 1.0f, 1.0f, 1.0f, 1.0f);
     
-    renderSprite(SPRITE_BACKGROUND, 768.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
-    
-    renderSprite(SPRITE_BACKGROUND, 0.0f - nearScrollPos, 160, 256, 320, 0.7f, 0.7f, 0.8f, 0.7f);
-    
-    renderSprite(SPRITE_PLAYER, gameState->player.x, gameState->player.y, 
-               gameState->player.width, gameState->player.height, 1.0f, 1.0f, 1.0f, 1.0f);
-    
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_BULLET]);
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (gameState->bullets[i].active) {
-            renderSprite(SPRITE_BULLET, gameState->bullets[i].x, gameState->bullets[i].y, 
-                       gameState->bullets[i].width, gameState->bullets[i].height, 1.0f, 1.0f, 0.5f, 1.0f);
+            drawQuad(gameState->bullets[i].x, gameState->bullets[i].y, 
+                     gameState->bullets[i].width, gameState->bullets[i].height, 1.0f, 1.0f, 0.5f, 1.0f);
         }
     }
     
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_BULLET]);
     for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
         if (gameState->enemyBullets[i].active) {
-            renderSprite(SPRITE_ENEMY_BULLET, gameState->enemyBullets[i].x, gameState->enemyBullets[i].y, 
-                       gameState->enemyBullets[i].width, gameState->enemyBullets[i].height, 1.0f, 0.0f, 0.0f, 1.0f);
+            drawQuad(gameState->enemyBullets[i].x, gameState->enemyBullets[i].y, 
+                     gameState->enemyBullets[i].width, gameState->enemyBullets[i].height, 1.0f, 0.0f, 0.0f, 1.0f);
         }
     }
     
@@ -252,11 +245,13 @@ void renderGame(GameState* gameState) {
                     spriteType = SPRITE_ENEMY_SMALL;
                     break;
             }
-            renderSprite(spriteType, gameState->enemies[i].x, gameState->enemies[i].y, 
-                       gameState->enemies[i].width, gameState->enemies[i].height, 1.0f, 1.0f, 1.0f, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, renderer.textures[spriteType]);
+            drawQuad(gameState->enemies[i].x, gameState->enemies[i].y, 
+                     gameState->enemies[i].width, gameState->enemies[i].height, 1.0f, 1.0f, 1.0f, 1.0f);
         }
     }
     
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_HEALTH]);
     for (int i = 0; i < MAX_POWERUPS; i++) {
         if (gameState->powerups[i].active) {
             SpriteType spriteType;
@@ -279,35 +274,40 @@ void renderGame(GameState* gameState) {
                     spriteType = SPRITE_POWERUP_HEALTH;
                     break;
             }
-            renderSprite(spriteType, gameState->powerups[i].x, gameState->powerups[i].y, 
-                       gameState->powerups[i].width, gameState->powerups[i].height, r, g, b, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, renderer.textures[spriteType]);
+            drawQuad(gameState->powerups[i].x, gameState->powerups[i].y, 
+                     gameState->powerups[i].width, gameState->powerups[i].height, r, g, b, 1.0f);
         }
     }
     
+    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_EXPLOSION]);
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
         if (gameState->explosions[i].active) {
             float alpha = gameState->explosions[i].currentLife / gameState->explosions[i].lifespan;
-            renderSprite(SPRITE_EXPLOSION, gameState->explosions[i].x, gameState->explosions[i].y, 
-                       gameState->explosions[i].width, gameState->explosions[i].height, 1.0f, 0.7f, 0.0f, alpha);
+            drawQuad(gameState->explosions[i].x, gameState->explosions[i].y, 
+                     gameState->explosions[i].width, gameState->explosions[i].height, 1.0f, 0.7f, 0.0f, alpha);
         }
     }
     
-    char scoreText[32];
-    sprintf(scoreText, "SCORE: %d", gameState->player.score);
 
     if (!gameState->benchmarkMode) {
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_HUD_LIFE]);
         for (int i = 0; i < gameState->player.lives; i++) {
-            renderSprite(SPRITE_HUD_LIFE, 20 + (i * 20), 20, 16, 16, 1.0f, 1.0f, 1.0f, 1.0f);
+            drawQuad(20 + (i * 20), 20, 16, 16, 1.0f, 1.0f, 1.0f, 1.0f);
         }
 
         if (gameState->player.isRapidFire) {
-            renderSprite(SPRITE_POWERUP_RAPID_FIRE, 430, 20, 16, 16, 1.0f, 1.0f, 0.0f, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_RAPID_FIRE]);
+            drawQuad(430, 20, 16, 16, 1.0f, 1.0f, 0.0f, 1.0f);
         }
 
         if (gameState->player.isDoubleBullet) {
-            renderSprite(SPRITE_POWERUP_DOUBLE_BULLET, 450, 20, 16, 16, 0.0f, 0.5f, 1.0f, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_DOUBLE_BULLET]);
+            drawQuad(450, 20, 16, 16, 0.0f, 0.5f, 1.0f, 1.0f);
         }
     }
+
+    glBindVertexArray(0);
 }
 
 void renderGameOver(GameState* gameState) {
