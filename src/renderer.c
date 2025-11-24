@@ -33,14 +33,55 @@ static const char* fragmentShaderSource =
 "    FragColor = texColor * color;\n"
 "}\n";
 
+static const char* bulletVertexShaderSource = 
+"#version 330 core\n"
+"layout (location = 0) in vec2 aPos;\n"
+"layout (location = 1) in vec2 aTexCoord;\n"
+"layout (location = 2) in vec2 iPos;\n"
+"layout (location = 3) in vec2 iSize;\n"
+"layout (location = 4) in vec4 iColor;\n"
+"out vec2 TexCoord;\n"
+"out vec4 Color;\n"
+"uniform mat4 projection;\n"
+"void main()\n"
+"{\n"
+"    vec2 worldPos = iPos + aPos * iSize;\n"
+"    gl_Position = projection * vec4(worldPos, 0.0, 1.0);\n"
+"    TexCoord = aTexCoord;\n"
+"    Color = iColor;\n"
+"}\n";
+
+static const char* bulletFragmentShaderSource = 
+"#version 330 core\n"
+"in vec2 TexCoord;\n"
+"in vec4 Color;\n"
+"out vec4 FragColor;\n"
+"uniform sampler2D texture1;\n"
+"void main()\n"
+"{\n"
+"    vec4 texColor = texture(texture1, TexCoord);\n"
+"    if(texColor.a < 0.1)\n"
+"        discard;\n"
+"    FragColor = texColor * Color;\n"
+"}\n";
+
 typedef struct {
     GLuint shaderProgram;
+    GLuint bulletShaderProgram;
     GLuint VAO, VBO, EBO;
+    GLuint bulletInstanceVBO;
     GLuint textures[SPRITE_COUNT];
     GLint modelLoc;
     GLint projectionLoc;
     GLint colorLoc;
+    GLint bulletProjectionLoc;
 } Renderer;
+
+typedef struct {
+    float x, y;
+    float w, h;
+    float r, g, b, a;
+} SpriteInstance;
 
 static Renderer renderer;
 
@@ -94,10 +135,16 @@ bool initRenderer() {
     if (renderer.shaderProgram == 0) {
         return false;
     }
+
+    renderer.bulletShaderProgram = createShaderProgram(bulletVertexShaderSource, bulletFragmentShaderSource);
+    if (renderer.bulletShaderProgram == 0) {
+        return false;
+    }
     
     renderer.modelLoc = glGetUniformLocation(renderer.shaderProgram, "model");
     renderer.projectionLoc = glGetUniformLocation(renderer.shaderProgram, "projection");
     renderer.colorLoc = glGetUniformLocation(renderer.shaderProgram, "color");
+    renderer.bulletProjectionLoc = glGetUniformLocation(renderer.bulletShaderProgram, "projection");
     
     float vertices[] = {
          0.5f,  0.5f,         1.0f, 0.0f,   
@@ -114,6 +161,7 @@ bool initRenderer() {
     glGenVertexArrays(1, &renderer.VAO);
     glGenBuffers(1, &renderer.VBO);
     glGenBuffers(1, &renderer.EBO);
+    glGenBuffers(1, &renderer.bulletInstanceVBO);
     glBindVertexArray(renderer.VAO);
     
     glBindBuffer(GL_ARRAY_BUFFER, renderer.VBO);    
@@ -127,6 +175,18 @@ bool initRenderer() {
     
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8 * MAX_BULLETS, NULL, GL_STREAM_DRAW);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(0));
+    glEnableVertexAttribArray(2);
+    glVertexAttribDivisor(2, 1);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 2));
+    glEnableVertexAttribArray(3);
+    glVertexAttribDivisor(3, 1);
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) * 4));
+    glEnableVertexAttribArray(4);
+    glVertexAttribDivisor(4, 1);
     
     glBindBuffer(GL_ARRAY_BUFFER, 0); 
     glBindVertexArray(0); 
@@ -139,9 +199,11 @@ bool initRenderer() {
     };
     
     glUseProgram(renderer.shaderProgram);
-    
     glUniformMatrix4fv(renderer.projectionLoc, 1, GL_FALSE, projectionMatrix);
-    
+
+    glUseProgram(renderer.bulletShaderProgram);
+    glUniformMatrix4fv(renderer.bulletProjectionLoc, 1, GL_FALSE, projectionMatrix);
+
     float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     glUniform4fv(renderer.colorLoc, 1, color);
     
@@ -152,7 +214,9 @@ void destroyRenderer() {
     glDeleteVertexArrays(1, &renderer.VAO);
     glDeleteBuffers(1, &renderer.VBO);
     glDeleteBuffers(1, &renderer.EBO);
+    glDeleteBuffers(1, &renderer.bulletInstanceVBO);
     glDeleteProgram(renderer.shaderProgram);
+    glDeleteProgram(renderer.bulletShaderProgram);
     glDeleteTextures(SPRITE_COUNT, renderer.textures);
 }
 
@@ -209,86 +273,210 @@ void renderGame(GameState* gameState) {
     drawQuad(gameState->player.x, gameState->player.y, 
              gameState->player.width, gameState->player.height, 1.0f, 1.0f, 1.0f, 1.0f);
     
-    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_BULLET]);
+    static SpriteInstance bulletInstances[MAX_BULLETS];
+    int bulletCount = 0;
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (gameState->bullets[i].active) {
-            drawQuad(gameState->bullets[i].x, gameState->bullets[i].y, 
-                     gameState->bullets[i].width, gameState->bullets[i].height, 1.0f, 1.0f, 0.5f, 1.0f);
+            SpriteInstance s;
+            s.x = gameState->bullets[i].x;
+            s.y = gameState->bullets[i].y;
+            s.w = gameState->bullets[i].width;
+            s.h = gameState->bullets[i].height;
+            s.r = 1.0f; s.g = 1.0f; s.b = 0.5f; s.a = 1.0f;
+            bulletInstances[bulletCount++] = s;
         }
     }
+    if (bulletCount > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_BULLET]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(bulletCount * (int)sizeof(SpriteInstance)), bulletInstances);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, bulletCount);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
     
-    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_BULLET]);
+    static SpriteInstance enemyBulletInstances[MAX_ENEMY_BULLETS];
+    int enemyBulletCount = 0;
     for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
         if (gameState->enemyBullets[i].active) {
-            drawQuad(gameState->enemyBullets[i].x, gameState->enemyBullets[i].y, 
-                     gameState->enemyBullets[i].width, gameState->enemyBullets[i].height, 1.0f, 0.0f, 0.0f, 1.0f);
+            SpriteInstance s;
+            s.x = gameState->enemyBullets[i].x;
+            s.y = gameState->enemyBullets[i].y;
+            s.w = gameState->enemyBullets[i].width;
+            s.h = gameState->enemyBullets[i].height;
+            s.r = 1.0f; s.g = 0.0f; s.b = 0.0f; s.a = 1.0f;
+            enemyBulletInstances[enemyBulletCount++] = s;
         }
     }
+    if (enemyBulletCount > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_BULLET]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(enemyBulletCount * (int)sizeof(SpriteInstance)), enemyBulletInstances);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, enemyBulletCount);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
     
+    static SpriteInstance enemiesSmall[MAX_ENEMIES];
+    static SpriteInstance enemiesMedium[MAX_ENEMIES];
+    static SpriteInstance enemiesLarge[MAX_ENEMIES];
+    static SpriteInstance enemiesBoss[MAX_ENEMIES];
+    int countSmall = 0, countMedium = 0, countLarge = 0, countBoss = 0;
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (gameState->enemies[i].active) {
-            SpriteType spriteType;
-            switch (gameState->enemies[i].type) {
-                case ENEMY_SMALL:
-                    spriteType = SPRITE_ENEMY_SMALL;
-                    break;
-                case ENEMY_MEDIUM:
-                    spriteType = SPRITE_ENEMY_MEDIUM;
-                    break;
-                case ENEMY_LARGE:
-                    spriteType = SPRITE_ENEMY_LARGE;
-                    break;
-                case ENEMY_BOSS:
-                    spriteType = SPRITE_ENEMY_BOSS;
-                    break;
-                default:
-                    spriteType = SPRITE_ENEMY_SMALL;
-                    break;
-            }
-            glBindTexture(GL_TEXTURE_2D, renderer.textures[spriteType]);
-            drawQuad(gameState->enemies[i].x, gameState->enemies[i].y, 
-                     gameState->enemies[i].width, gameState->enemies[i].height, 1.0f, 1.0f, 1.0f, 1.0f);
+        if (!gameState->enemies[i].active) continue;
+        SpriteInstance s;
+        s.x = gameState->enemies[i].x;
+        s.y = gameState->enemies[i].y;
+        s.w = gameState->enemies[i].width;
+        s.h = gameState->enemies[i].height;
+        s.r = 1.0f; s.g = 1.0f; s.b = 1.0f; s.a = 1.0f;
+        switch (gameState->enemies[i].type) {
+            case ENEMY_SMALL:
+                enemiesSmall[countSmall++] = s;
+                break;
+            case ENEMY_MEDIUM:
+                enemiesMedium[countMedium++] = s;
+                break;
+            case ENEMY_LARGE:
+                enemiesLarge[countLarge++] = s;
+                break;
+            case ENEMY_BOSS:
+                enemiesBoss[countBoss++] = s;
+                break;
+            default:
+                enemiesSmall[countSmall++] = s;
+                break;
         }
     }
+    if (countSmall > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_SMALL]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countSmall * (int)sizeof(SpriteInstance)), enemiesSmall);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countSmall);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+    if (countMedium > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_MEDIUM]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countMedium * (int)sizeof(SpriteInstance)), enemiesMedium);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countMedium);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+    if (countLarge > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_LARGE]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countLarge * (int)sizeof(SpriteInstance)), enemiesLarge);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countLarge);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+    if (countBoss > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_ENEMY_BOSS]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countBoss * (int)sizeof(SpriteInstance)), enemiesBoss);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countBoss);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
     
-    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_HEALTH]);
+    static SpriteInstance powerupsHealth[MAX_POWERUPS];
+    static SpriteInstance powerupsRapid[MAX_POWERUPS];
+    static SpriteInstance powerupsDouble[MAX_POWERUPS];
+    int countHealth = 0, countRapid = 0, countDouble = 0;
     for (int i = 0; i < MAX_POWERUPS; i++) {
-        if (gameState->powerups[i].active) {
-            SpriteType spriteType;
-            float r = 1.0f, g = 1.0f, b = 1.0f;
-            
-            switch (gameState->powerups[i].type) {
-                case POWERUP_HEALTH:
-                    spriteType = SPRITE_POWERUP_HEALTH;
-                    r = 0.0f; g = 1.0f; b = 0.0f;
-                    break;
-                case POWERUP_RAPID_FIRE:
-                    spriteType = SPRITE_POWERUP_RAPID_FIRE;
-                    r = 1.0f; g = 1.0f; b = 0.0f;
-                    break;
-                case POWERUP_DOUBLE_BULLET:
-                    spriteType = SPRITE_POWERUP_DOUBLE_BULLET;
-                    r = 0.0f; g = 0.5f; b = 1.0f;
-                    break;
-                default:
-                    spriteType = SPRITE_POWERUP_HEALTH;
-                    break;
-            }
-            glBindTexture(GL_TEXTURE_2D, renderer.textures[spriteType]);
-            drawQuad(gameState->powerups[i].x, gameState->powerups[i].y, 
-                     gameState->powerups[i].width, gameState->powerups[i].height, r, g, b, 1.0f);
+        if (!gameState->powerups[i].active) continue;
+        SpriteInstance s;
+        s.x = gameState->powerups[i].x;
+        s.y = gameState->powerups[i].y;
+        s.w = gameState->powerups[i].width;
+        s.h = gameState->powerups[i].height;
+        switch (gameState->powerups[i].type) {
+            case POWERUP_HEALTH:
+                s.r = 0.0f; s.g = 1.0f; s.b = 0.0f; s.a = 1.0f;
+                powerupsHealth[countHealth++] = s;
+                break;
+            case POWERUP_RAPID_FIRE:
+                s.r = 1.0f; s.g = 1.0f; s.b = 0.0f; s.a = 1.0f;
+                powerupsRapid[countRapid++] = s;
+                break;
+            case POWERUP_DOUBLE_BULLET:
+                s.r = 0.0f; s.g = 0.5f; s.b = 1.0f; s.a = 1.0f;
+                powerupsDouble[countDouble++] = s;
+                break;
+            default:
+                s.r = 0.0f; s.g = 1.0f; s.b = 0.0f; s.a = 1.0f;
+                powerupsHealth[countHealth++] = s;
+                break;
         }
     }
-    
-    glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_EXPLOSION]);
+    if (countHealth > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_HEALTH]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countHealth * (int)sizeof(SpriteInstance)), powerupsHealth);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countHealth);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+    if (countRapid > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_RAPID_FIRE]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countRapid * (int)sizeof(SpriteInstance)), powerupsRapid);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countRapid);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+    if (countDouble > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_POWERUP_DOUBLE_BULLET]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(countDouble * (int)sizeof(SpriteInstance)), powerupsDouble);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, countDouble);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
+
+    static SpriteInstance explosionInstances[MAX_EXPLOSIONS];
+    int explosionCount = 0;
     for (int i = 0; i < MAX_EXPLOSIONS; i++) {
-        if (gameState->explosions[i].active) {
-            float alpha = gameState->explosions[i].currentLife / gameState->explosions[i].lifespan;
-            drawQuad(gameState->explosions[i].x, gameState->explosions[i].y, 
-                     gameState->explosions[i].width, gameState->explosions[i].height, 1.0f, 0.7f, 0.0f, alpha);
-        }
+        if (!gameState->explosions[i].active) continue;
+        SpriteInstance s;
+        s.x = gameState->explosions[i].x;
+        s.y = gameState->explosions[i].y;
+        s.w = gameState->explosions[i].width;
+        s.h = gameState->explosions[i].height;
+        float alpha = gameState->explosions[i].currentLife / gameState->explosions[i].lifespan;
+        s.r = 1.0f; s.g = 0.7f; s.b = 0.0f; s.a = alpha;
+        explosionInstances[explosionCount++] = s;
     }
-    
+    if (explosionCount > 0) {
+        glUseProgram(renderer.bulletShaderProgram);
+        glBindVertexArray(renderer.VAO);
+        glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_EXPLOSION]);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer.bulletInstanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(explosionCount * (int)sizeof(SpriteInstance)), explosionInstances);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, explosionCount);
+        glUseProgram(renderer.shaderProgram);
+        glBindVertexArray(renderer.VAO);
+    }
 
     if (!gameState->benchmarkMode) {
         glBindTexture(GL_TEXTURE_2D, renderer.textures[SPRITE_HUD_LIFE]);
