@@ -7,6 +7,7 @@
 
 #include "resources.h"
 #include "renderer.h"
+#include "rng.h"
 
 static GLuint createTextureFromPixelData(unsigned char* pixels, int width, int height, int channels) {
     GLuint textureID;
@@ -307,15 +308,15 @@ static GLuint createExplosionTexture() {
         unsigned char pixels[256 * 256 * 4] = {0};
         
         for (int i = 0; i < 200; i++) {
-            int x = rand() % 256;
-            int y = rand() % 256;
-            int brightness = rand() % 155 + 100; // 100-255
+            int x = (int)(rng_u32() % 256u);
+            int y = (int)(rng_u32() % 256u);
+            int brightness = (int)(rng_u32() % 155u) + 100;
             
             int index = (y * 256 + x) * 4;
-            pixels[index + 0] = brightness; // R
-            pixels[index + 1] = brightness; // G
-            pixels[index + 2] = brightness; // B
-            pixels[index + 3] = 255;       // A
+            pixels[index + 0] = brightness;
+            pixels[index + 1] = brightness;
+            pixels[index + 2] = brightness;
+            pixels[index + 3] = 255;
         }
         
         return createTextureFromPixelData(pixels, 256, 256, 4);
